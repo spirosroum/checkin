@@ -1,6 +1,6 @@
 // =====================================================================
 // app-mobile-checkin.js
-// App methods: getMobileSessionMember, saveMobileSession, clearMobileSession, showMobileCheckinView, mobileCheckinSubmit, mobileCheckinGo, beginMobileCheckin, confirmCheckin, mobileCheckinConfirm, showMobileCheckinSuccess, mobileCheckinAgain, mobileCheckinSwitch, cancelCheckinSelection
+// App methods: getMobileSessionMember, saveMobileSession, clearMobileSession, showKioskCheckinPortal, showMobileCheckinLanding, showMobileCheckinView, mobileCheckinSubmit, mobileCheckinGo, beginMobileCheckin, confirmCheckin, mobileCheckinConfirm, showMobileCheckinSuccess, mobileCheckinAgain, mobileCheckinSwitch, cancelCheckinSelection
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -19,7 +19,19 @@ Object.assign(App, {
                 localStorage.removeItem('gym_member_session');
             },
 
-            showMobileCheckinView: () => {
+            showKioskCheckinPortal: () => {
+                App.isMobileCheckinMode = true;
+                document.querySelectorAll('.app-container').forEach(el => el.classList.add('hidden'));
+                const kioskView = document.getElementById('view-kiosk');
+                if (kioskView) kioskView.classList.remove('hidden');
+                const mobileView = document.getElementById('view-mobile-checkin');
+                if (mobileView) mobileView.classList.add('hidden');
+                App.renderCheckinNotice();
+            },
+
+            // Shows the dedicated mobile check-in screen (ID entry or "welcome back" landing).
+            // Used for the first-time ID entry and as a landing after cancelling the class chooser.
+            showMobileCheckinLanding: () => {
                 App.isMobileCheckinMode = true;
                 document.querySelectorAll('.app-container').forEach(el => el.classList.add('hidden'));
                 const kioskView = document.getElementById('view-kiosk');
@@ -53,6 +65,17 @@ Object.assign(App, {
                 }
             },
 
+            showMobileCheckinView: () => {
+                const remembered = App.getMobileSessionMember();
+                if (remembered) {
+                    // Return to the main check-in portal with the class chooser ready to go.
+                    App.showKioskCheckinPortal();
+                    App.beginMobileCheckin(remembered);
+                    return;
+                }
+                App.showMobileCheckinLanding();
+            },
+
             mobileCheckinSubmit: () => {
                 const input = document.getElementById('mobile-checkin-id');
                 if (!input) return;
@@ -65,12 +88,14 @@ Object.assign(App, {
                 }
                 App.saveMobileSession(member.id);
                 input.value = '';
+                App.showKioskCheckinPortal();
                 App.beginMobileCheckin(member);
             },
 
             mobileCheckinGo: () => {
                 const member = App.getMobileSessionMember();
                 if (!member) { App.mobileCheckinSwitch(); return; }
+                App.showKioskCheckinPortal();
                 App.beginMobileCheckin(member);
             },
 
@@ -109,6 +134,16 @@ Object.assign(App, {
             },
 
             showMobileCheckinSuccess: () => {
+                App.isMobileCheckinMode = true;
+                document.querySelectorAll('.app-container').forEach(el => el.classList.add('hidden'));
+                const kioskView = document.getElementById('view-kiosk');
+                if (kioskView) kioskView.classList.add('hidden');
+                const adminView = document.getElementById('view-admin');
+                if (adminView) adminView.classList.add('hidden');
+                const memberView = document.getElementById('view-member');
+                if (memberView) memberView.classList.add('hidden');
+                const mobileView = document.getElementById('view-mobile-checkin');
+                if (mobileView) mobileView.classList.remove('hidden');
                 const identify = document.getElementById('mobile-checkin-identify');
                 const greeting = document.getElementById('mobile-checkin-greeting');
                 const success = document.getElementById('mobile-checkin-success');
@@ -139,7 +174,7 @@ Object.assign(App, {
                 if (App.isMobileCheckinMode) {
                     App.pendingCheckinMember = null;
                     App.closeModal('modal-checkin-classes');
-                    App.showMobileCheckinView();
+                    App.showMobileCheckinLanding();
                 } else {
                     App.cancelKioskClassSelection();
                 }

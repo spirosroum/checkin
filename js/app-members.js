@@ -617,7 +617,8 @@ Object.assign(App, {
                     App.renderMemberBin();
                     // Refresh live lists and dashboard so deleted member is not counted
                     App.renderLivePresent();
-                    if(!document.getElementById('pane-admin-dashboard').classList.contains('hidden')) App.renderAdminDashboard();
+                    const dashboardPane = document.getElementById('pane-admin-dashboard');
+                    if (dashboardPane && !dashboardPane.classList.contains('hidden')) App.renderAdminDashboard();
                 }
             },
  

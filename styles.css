@@ -44,6 +44,8 @@
         .btn-warning:hover { filter: brightness(1.1); }
         .btn-outline { background: transparent; border: 1px solid var(--gray); color: var(--dark); }
         .btn-outline:hover { background: var(--gray-light); }
+        .btn-google { background: #ffffff; border: 1px solid #dadce0; color: #1a1a1a; display: inline-flex; align-items: center; justify-content: center; gap: 0.6rem; box-shadow: 0 1px 2px rgba(60, 64, 67, 0.2); }
+        .btn-google:hover { background: #f8f9fa; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(60, 64, 67, 0.25); }
         /* Make select elements that use btn-outline look like header buttons */
         select.btn-outline, select.lang-select { width: auto; padding: 0.4rem 0.8rem; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; border-radius: 6px; background: transparent; }
         .kiosk-header .btn-primary,

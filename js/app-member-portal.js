@@ -24,7 +24,8 @@ Object.assign(App, {
                 App.isMobileCheckinMode = false;
                 App.closeModal('modal-login');
                 document.getElementById('view-kiosk').classList.add('hidden');
-                document.getElementById('view-admin').classList.add('hidden');
+                const adminView = document.getElementById('view-admin');
+                if (adminView) adminView.classList.add('hidden');
                 document.getElementById('view-member').classList.remove('hidden');
                 input.value = '';
                 App.renderMemberDashboard();
@@ -260,6 +261,12 @@ Object.assign(App, {
                 App.currentUser = null;
                 App.isMobileCheckinMode = false;
                 localStorage.removeItem('gym_member_session');
+                // Sign out of Firebase admin session (if any) — onAuthStateChanged
+                // will fire and lock/remove the admin view.
+                const auth = getAuth();
+                if (auth && auth.currentUser) {
+                    auth.signOut().catch(err => console.warn('Admin sign-out failed', err));
+                }
                 document.getElementById('member-login-id').value = '';
                 document.querySelectorAll('.app-container').forEach(el => el.classList.add('hidden'));
                 document.getElementById('view-kiosk').classList.remove('hidden');

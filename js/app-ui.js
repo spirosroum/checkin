@@ -116,6 +116,7 @@ Object.assign(App, {
             updateNotificationBadge: () => {
                 const unread = DB.getNotifications().filter(n => !n.read).length;
                 const badge = document.getElementById('nav-notif-badge');
+                if (!badge) return;
                 if (unread > 0) {
                     badge.innerText = unread;
                     badge.classList.remove('hidden');
@@ -224,12 +225,21 @@ Object.assign(App, {
             },
             closeModal: (id) => {
                 document.getElementById(id).classList.add('hidden');
-                if(id === 'modal-login') document.getElementById('admin-login-pwd').value = '';
+                if(id === 'modal-login') {
+                    document.getElementById('admin-login-pwd').value = '';
+                    document.getElementById('admin-login-email').value = '';
+                }
                 const anyModalOpen = Array.from(document.querySelectorAll('.modal-overlay')).some(m => !m.classList.contains('hidden'));
                 if (!anyModalOpen) document.body.style.overflow = '';
             },
 
             navigate: (targetPane) => {
+                // Hard gate: admin panes are unreachable without an authenticated admin session.
+                if (targetPane && targetPane.startsWith('admin-') && !App.isAdminAuthed()) {
+                    App.lockAdmin();
+                    return;
+                }
+
                 if(event && event.currentTarget && event.currentTarget.classList.contains('nav-item')) {
                     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
                     event.currentTarget.classList.add('active');
@@ -282,17 +292,60 @@ Object.assign(App, {
                 }
             },
 
+            loginWithGoogle: () => {
+                const auth = getAuth();
+                if (!auth) return alert('Firebase Auth is not available.');
+                const provider = new firebase.auth.GoogleAuthProvider();
+                auth.signInWithPopup(provider)
+                    .then((cred) => {
+                        if (isAdminUser(cred.user)) {
+                            App.closeModal('modal-login');
+                            App.unlockAdmin();
+                        } else {
+                            // Signed in with Google, but not the admin account — revoke immediately.
+                            auth.signOut();
+                            alert('This Google account does not have admin access.');
+                        }
+                    })
+                    .catch((err) => {
+                        if (!err) return;
+                        if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
+                        if (err.code === 'auth/popup-blocked') return alert('Google popup was blocked. Allow popups for this site and try again.');
+                        if (err.code === 'auth/unauthorized-domain') return alert('This domain is not authorized for Google sign-in. Add it in Firebase Console -> Authentication -> Settings -> Authorized domains.');
+                        alert(err.message || 'Google sign-in failed. Please try again.');
+                    });
+            },
+
             loginAsAdmin: () => {
+                const emailInput = document.getElementById('admin-login-email');
                 const pwdInput = document.getElementById('admin-login-pwd');
-                if (pwdInput.value === DB.getAdminPassword()) {
-                    App.closeModal('modal-login');
-                    document.getElementById('view-kiosk').classList.add('hidden');
-                    document.getElementById('view-admin').classList.remove('hidden');
-                    pwdInput.value = '';
-                    App.navigate('admin-checkin');
-                } else {
-                    alert('Incorrect Admin Password.');
-                }
+                const email = (emailInput.value || '').trim();
+                const pwd = pwdInput.value;
+                if (!email || !pwd) return alert('Please enter the admin email and password.');
+                const auth = getAuth();
+                if (!auth) return alert('Firebase Auth is not available. Check your connection.');
+                auth.signInWithEmailAndPassword(email, pwd)
+                    .then((cred) => {
+                        if (isAdminUser(cred.user)) {
+                            pwdInput.value = '';
+                            App.closeModal('modal-login');
+                            App.unlockAdmin();
+                        } else {
+                            // Signed in, but not the admin account — revoke immediately.
+                            auth.signOut();
+                            alert('This account does not have admin access.');
+                        }
+                    })
+                    .catch((err) => {
+                        let msg = 'Sign-in failed. Please try again.';
+                        if (err && err.code === 'auth/invalid-credential') msg = 'Incorrect email or password.';
+                        else if (err && err.code === 'auth/wrong-password') msg = 'Incorrect email or password.';
+                        else if (err && err.code === 'auth/user-not-found') msg = 'No account found with this email.';
+                        else if (err && err.code === 'auth/invalid-email') msg = 'Please enter a valid email address.';
+                        else if (err && err.code === 'auth/too-many-requests') msg = 'Too many failed attempts. Try again later.';
+                        else if (err && err.message) msg = err.message;
+                        alert(msg);
+                    });
             },
             
 });

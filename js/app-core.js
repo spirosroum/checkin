@@ -20,6 +20,21 @@
             firebase.initializeApp(firebaseConfig);
         }
 
+        // =====================================================================
+        // ADMIN AUTH (Firebase Authentication, email/password)
+        // Only this email is recognized as the gym administrator.
+        // Create this user in Firebase Console -> Authentication -> Users.
+        // =====================================================================
+        const ADMIN_EMAIL = 'spirosroumeliotis29@gmail.com';
+
+        function getAuth() {
+            return (window.firebase && firebase.auth) ? firebase.auth() : null;
+        }
+
+        function isAdminUser(user) {
+            return !!(user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+        }
+
 const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '#0891b2', '#db2777', '#334155', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#0f766e', '#86198f'];
 
         // CLOUD-SYNCED DATA LAYER (Firestore)
@@ -38,7 +53,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             classCheckins: JSON.parse(localStorage.getItem('gym_class_checkins') || '[]'),
             portalName: localStorage.getItem('gym_portal_name') || '🥋 BJJ Kiosk Portal',
             hiddenBelts: JSON.parse(localStorage.getItem('gym_hidden_belts') || '[]'),
-            adminPassword: localStorage.getItem('gym_admin_pwd') || 'admin',
             currency: localStorage.getItem('gym_currency') || '€',
             checkinNotice: localStorage.getItem('gym_checkin_notice') || '',
             checkinNoticeColor: localStorage.getItem('gym_checkin_notice_color') || '#fde68a'
@@ -62,7 +76,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.setItem('gym_class_checkins', JSON.stringify(STATE.classCheckins || []));
                 localStorage.setItem('gym_portal_name', STATE.portalName || '🥋 BJJ Kiosk Portal');
                 localStorage.setItem('gym_hidden_belts', JSON.stringify(STATE.hiddenBelts || []));
-                localStorage.setItem('gym_admin_pwd', STATE.adminPassword || 'admin');
                 localStorage.setItem('gym_currency', STATE.currency || '€');
                 localStorage.setItem('gym_checkin_notice', STATE.checkinNotice || '');
                 localStorage.setItem('gym_checkin_notice_color', STATE.checkinNoticeColor || '#fde68a');
@@ -93,7 +106,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 classCheckins: STATE.classCheckins || [],
                 portalName: STATE.portalName || '🥋 BJJ Kiosk Portal',
                 hiddenBelts: STATE.hiddenBelts || [],
-                adminPassword: STATE.adminPassword || 'admin',
                 currency: STATE.currency || '€',
                 checkinNotice: STATE.checkinNotice || '',
                 checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a',
@@ -142,7 +154,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
  
                         if (Object.prototype.hasOwnProperty.call(data, 'portalName')) STATE.portalName = data.portalName || STATE.portalName || '🥋 BJJ Kiosk Portal';
                         if (Object.prototype.hasOwnProperty.call(data, 'hiddenBelts')) STATE.hiddenBelts = Array.isArray(data.hiddenBelts) ? data.hiddenBelts : STATE.hiddenBelts || [];
-                        if (Object.prototype.hasOwnProperty.call(data, 'adminPassword')) STATE.adminPassword = data.adminPassword || STATE.adminPassword || 'admin';
                         if (Object.prototype.hasOwnProperty.call(data, 'currency')) STATE.currency = data.currency || STATE.currency || '€';
                         if (Object.prototype.hasOwnProperty.call(data, 'checkinNotice')) STATE.checkinNotice = data.checkinNotice || STATE.checkinNotice || '';
                         if (Object.prototype.hasOwnProperty.call(data, 'checkinNoticeColor')) STATE.checkinNoticeColor = data.checkinNoticeColor || STATE.checkinNoticeColor || '#fde68a';
@@ -166,7 +177,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         localStorage.setItem('gym_class_checkins', JSON.stringify(STATE.classCheckins || []));
                         localStorage.setItem('gym_portal_name', STATE.portalName || '🥋 BJJ Kiosk Portal');
                         localStorage.setItem('gym_hidden_belts', JSON.stringify(STATE.hiddenBelts || []));
-                        localStorage.setItem('gym_admin_pwd', STATE.adminPassword || 'admin');
                         localStorage.setItem('gym_currency', STATE.currency || '€');
                         localStorage.setItem('gym_checkin_notice', STATE.checkinNotice || '');
                         localStorage.setItem('gym_checkin_notice_color', STATE.checkinNoticeColor || '#fde68a');
@@ -177,27 +187,34 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
                     // Explicitly call all known render/update functions so DOM immediately reflects cloud data.
                     try {
-                        // Core renders
-                        App.renderMemberDirectory && App.renderMemberDirectory();
-                        App.renderMemberBin && App.renderMemberBin();
-                        App.renderPlans && App.renderPlans();
-                        App.renderPlanBin && App.renderPlanBin();
-                        App.renderSchedules && App.renderSchedules();
-                        App.renderScheduleBin && App.renderScheduleBin();
+                        // Core renders (kiosk + member)
                         App.renderLivePresent && App.renderLivePresent();
                         App.renderCheckinNotice && App.renderCheckinNotice();
-                        App.renderNotifications && App.renderNotifications();
-                        App.renderNotificationBin && App.renderNotificationBin();
                         App.updateNotificationBadge && App.updateNotificationBadge();
-                        App.renderVisitLog && App.renderVisitLog();
-                        App.renderAdminDashboard && App.renderAdminDashboard();
-                        App.renderAllPayments && App.renderAllPayments();
-                        App.renderAnalyticalCalendar && App.renderAnalyticalCalendar();
-                        App.renderMemberDirectory && App.renderMemberDirectory();
+
+                        // Admin-only renders — only run while an authenticated admin session exists.
+                        // These target elements inside #view-admin, which is removed from the DOM
+                        // unless the admin is signed in.
+                        if (App.isAdminAuthed()) {
+                            App.renderMemberDirectory && App.renderMemberDirectory();
+                            App.renderMemberBin && App.renderMemberBin();
+                            App.renderPlans && App.renderPlans();
+                            App.renderPlanBin && App.renderPlanBin();
+                            App.renderSchedules && App.renderSchedules();
+                            App.renderScheduleBin && App.renderScheduleBin();
+                            App.renderNotifications && App.renderNotifications();
+                            App.renderNotificationBin && App.renderNotificationBin();
+                            App.renderVisitLog && App.renderVisitLog();
+                            App.renderAdminDashboard && App.renderAdminDashboard();
+                            App.renderAllPayments && App.renderAllPayments();
+                            App.renderAnalyticalCalendar && App.renderAnalyticalCalendar();
+                        }
 
                         // Ensure calendar/kiosk schedule containers are refreshed
                         try { App.renderCalendarView && App.renderCalendarView('kiosk-schedule-container', false); } catch(e){}
-                        try { App.renderCalendarView && App.renderCalendarView('master-schedule-container', true); } catch(e){}
+                        if (App.isAdminAuthed()) {
+                            try { App.renderCalendarView && App.renderCalendarView('master-schedule-container', true); } catch(e){}
+                        }
 
                         // Call any legacy or external-named renderers if they exist on the page
                         if (typeof window.renderSchedule === 'function') try { window.renderSchedule(); } catch(e) {}
@@ -217,7 +234,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
         const DB = {
             // getters
-            getAdminPassword: () => STATE.adminPassword || 'admin',
             getMembers: () => STATE.members || [],
             getBin: () => STATE.bin || [],
             getVisits: () => STATE.visits || [],
@@ -237,7 +253,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             getCheckinNoticeColor: () => STATE.checkinNoticeColor || '#fde68a',
 
             // setters (update state and persist)
-            setAdminPassword: (pwd) => { STATE.adminPassword = pwd; return saveToCloud(); },
             saveMembers: (data) => { STATE.members = data || []; return saveToCloud(); },
             saveBin: (data) => { STATE.bin = data || []; return saveToCloud(); },
             saveVisits: (data) => { STATE.visits = data || []; return saveToCloud(); },
@@ -263,7 +278,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     portalName: STATE.portalName || '🥋 BJJ Kiosk Portal', hiddenBelts: STATE.hiddenBelts || [],
                     bin: STATE.bin || [], classCheckins: STATE.classCheckins || [], notifications: STATE.notifications || [],
                     notificationBin: STATE.notificationBin || [],
-                    adminPassword: STATE.adminPassword || 'admin', currency: STATE.currency || '€', checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a'
+                    adminPassword: null, // legacy field — never stored anymore
+                    currency: STATE.currency || '€', checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a'
                 };
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                 const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -291,7 +307,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         if (data.hiddenBelts) STATE.hiddenBelts = data.hiddenBelts;
                         if (data.bin) STATE.bin = data.bin;
                         if (data.classCheckins) STATE.classCheckins = data.classCheckins;
-                        if (data.adminPassword) STATE.adminPassword = data.adminPassword;
                         if (data.currency) STATE.currency = data.currency;
                         if (data.checkinNoticeColor) STATE.checkinNoticeColor = data.checkinNoticeColor;
 
@@ -471,6 +486,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             kioskMsgTimer: null,
             draftClassSlots: [], 
             currentUser: null,
+            authUser: null,
+            adminAuthed: false,
+            adminViewTemplate: null,
+            adminListenersBound: false,
             dirSortCol: 'name',
             dirSortAsc: true,
             dirStatus: 'active',
@@ -662,17 +681,105 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 return date;
             },
 
+            // ---------- ADMIN AUTH & VIEW GATING ----------
+            // True only while the Firebase Auth user matches ADMIN_EMAIL.
+            // Every admin entry point (navigate, renders) checks this flag,
+            // and the admin view is physically removed from the DOM when locked.
+            isAdminAuthed: () => !!App.adminAuthed,
+
+            initAuth: () => {
+                const auth = getAuth();
+                if (!auth) {
+                    console.warn('Firebase Auth not available — admin login disabled.');
+                    return;
+                }
+                auth.onAuthStateChanged((user) => {
+                    if (isAdminUser(user)) {
+                        App.authUser = user;
+                        App.unlockAdmin();
+                    } else {
+                        App.authUser = user || null;
+                        App.lockAdmin();
+                    }
+                });
+            },
+
+            // Rebind event listeners for elements inside #view-admin.
+            // The admin view is removed from the DOM when locked, so listeners
+            // attached at init are lost and must be re-attached after unlock.
+            bindAdminListeners: () => {
+                if (App.adminListenersBound) return;
+                const bind = (id, evt, fn) => {
+                    const el = document.getElementById(id);
+                    if (el) el.addEventListener(evt, fn);
+                };
+                bind('checkin-search', 'input', App.handleAdminCheckinSearch);
+                bind('member-form', 'submit', App.saveMember);
+                bind('plan-form', 'submit', App.savePlan);
+                bind('visit-form', 'submit', App.saveVisitEdit);
+                bind('payment-form', 'submit', App.savePayment);
+                App.adminListenersBound = true;
+            },
+
+            // Remove the admin view from the DOM entirely (not just CSS-hidden)
+            // and force the kiosk (unless a member/mobile view is active).
+            lockAdmin: () => {
+                App.adminAuthed = false;
+                App.adminListenersBound = false;
+                const adminView = document.getElementById('view-admin');
+                if (adminView) {
+                    if (!App.adminViewTemplate) App.adminViewTemplate = adminView.outerHTML;
+                    adminView.remove();
+                }
+                const memberVisible = document.getElementById('view-member') && !document.getElementById('view-member').classList.contains('hidden');
+                const mobileVisible = document.getElementById('view-mobile-checkin') && !document.getElementById('view-mobile-checkin').classList.contains('hidden');
+                if (!memberVisible && !mobileVisible) {
+                    document.querySelectorAll('.app-container').forEach(el => el.classList.add('hidden'));
+                    const kiosk = document.getElementById('view-kiosk');
+                    if (kiosk) kiosk.classList.remove('hidden');
+                }
+                App.closeModal('modal-login');
+                App.renderCheckinNotice && App.renderCheckinNotice();
+            },
+
+            // Re-insert the admin view from the cached template after successful auth.
+            unlockAdmin: () => {
+                App.adminAuthed = true;
+                if (!document.getElementById('view-admin')) {
+                    if (App.adminViewTemplate) {
+                        document.body.insertAdjacentHTML('beforeend', App.adminViewTemplate);
+                    } else {
+                        console.warn('No admin view template cached — cannot unlock admin portal.');
+                        App.adminAuthed = false;
+                        return;
+                    }
+                }
+                App.bindAdminListeners();
+                App.renderColorPaletteUI && App.renderColorPaletteUI();
+                App.renderColumnConfigurator && App.renderColumnConfigurator();
+                const monthInput = document.getElementById('export-month-picker');
+                if (monthInput && !monthInput.value) monthInput.value = new Date().toISOString().slice(0, 7);
+                // Steal focus only when no member/mobile session is active.
+                const memberVisible = document.getElementById('view-member') && !document.getElementById('view-member').classList.contains('hidden');
+                const mobileVisible = document.getElementById('view-mobile-checkin') && !document.getElementById('view-mobile-checkin').classList.contains('hidden');
+                if (!memberVisible && !mobileVisible) {
+                    document.querySelectorAll('.app-container').forEach(el => el.classList.add('hidden'));
+                    const kiosk = document.getElementById('view-kiosk');
+                    if (kiosk) kiosk.classList.add('hidden');
+                    const adminView = document.getElementById('view-admin');
+                    if (adminView) adminView.classList.remove('hidden');
+                    App.navigate('admin-checkin');
+                }
+            },
+
             init: () => {
                 App.cleanBin(); 
                 App.updateUICurrency();
  
                 document.getElementById('member-login-id').addEventListener('keyup', (e) => { if (e.key === 'Enter') App.loginAsMember(); });
-                document.getElementById('checkin-search').addEventListener('input', App.handleAdminCheckinSearch);
-                document.getElementById('member-directory-search').addEventListener('input', App.searchMemberDirectory);
-                document.getElementById('member-form').addEventListener('submit', App.saveMember);
-                document.getElementById('plan-form').addEventListener('submit', App.savePlan);
-                document.getElementById('visit-form').addEventListener('submit', App.saveVisitEdit);
-                document.getElementById('payment-form').addEventListener('submit', App.savePayment);
+                // Admin-view listeners (forms/search inside #view-admin) are bound here
+                // and re-bound after each unlock (see bindAdminListeners).
+                App.bindAdminListeners();
                  
                 document.getElementById('kiosk-title-display').innerText = DB.getPortalName();
  
@@ -699,6 +806,13 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
                 // Initialize Firestore realtime sync (if available)
                 try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); }
+
+                // Admin auth: cache the admin view template, lock it out of the DOM,
+                // then let onAuthStateChanged unlock it if a valid admin session exists.
+                const adminView = document.getElementById('view-admin');
+                if (adminView) App.adminViewTemplate = adminView.outerHTML;
+                App.lockAdmin();
+                App.initAuth();
 
                 App.autoCheckoutStaleVisits();
                 setInterval(App.autoCheckoutStaleVisits, 60000);
@@ -739,7 +853,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (updated) {
                     DB.saveVisits(visits);
                     App.renderLivePresent();
-                    if(!document.getElementById('pane-admin-dashboard').classList.contains('hidden')) App.renderAdminDashboard();
+                    const dashboardPane = document.getElementById('pane-admin-dashboard');
+                    if (dashboardPane && !dashboardPane.classList.contains('hidden')) App.renderAdminDashboard();
                 }
             },
 

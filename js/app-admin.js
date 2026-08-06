@@ -1,23 +1,19 @@
 // =====================================================================
 // app-admin.js
-// App methods: updateAdminPassword, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility
+// App methods: sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
 Object.assign(App, {
             // --- ADMIN DASHBOARD & LOG ---
             // --- SETTINGS ---
-            updateAdminPassword: () => {
-                const current = document.getElementById('form-pwd-current').value;
-                const newPwd = document.getElementById('form-pwd-new').value;
-                
-                if (!current || !newPwd) return alert("Please fill in both current and new password fields.");
-                if (current !== DB.getAdminPassword()) return alert("Current password is incorrect.");
-                
-                DB.setAdminPassword(newPwd);
-                document.getElementById('form-pwd-current').value = '';
-                document.getElementById('form-pwd-new').value = '';
-                alert("Admin password successfully updated!");
+            sendAdminPasswordReset: () => {
+                const auth = getAuth();
+                if (!auth) return alert('Firebase Auth is not available.');
+                if (!ADMIN_EMAIL) return alert('No admin email configured for this app.');
+                auth.sendPasswordResetEmail(ADMIN_EMAIL)
+                    .then(() => alert(`Password reset email sent to ${ADMIN_EMAIL}. Check your inbox.`))
+                    .catch(err => alert('Failed to send reset email: ' + (err && err.message ? err.message : err)));
             },
 
             renderAdminDashboard: () => {

@@ -606,7 +606,8 @@ Object.assign(App, {
                     visit.exitTime = new Date().toISOString();
                     DB.saveVisits(visits);
                     App.renderLivePresent();
-                    if(!document.getElementById('pane-admin-dashboard').classList.contains('hidden')) App.renderAdminDashboard();
+                    const dashboardPane = document.getElementById('pane-admin-dashboard');
+                    if (dashboardPane && !dashboardPane.classList.contains('hidden')) App.renderAdminDashboard();
                 }
             },
 
