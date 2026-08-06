@@ -79,7 +79,7 @@ Object.assign(App, {
                                     <tr>
                                         <td data-label="${Utils.escapeHTML(dateHeader)}">${Utils.formatDate(v.entryTime)}</td>
                                         <td data-label="${Utils.escapeHTML(entryHeader)}">${Utils.formatTime(v.entryTime)}</td>
-                                        <td data-label="${Utils.escapeHTML(durationHeader)}">${Utils.calcDuration(v.entryTime, v.exitTime)}</td>
+                                        <td data-label="${Utils.escapeHTML(durationHeader)}">${App.calcVisitDuration(v)}</td>
                                         <td data-label="${Utils.escapeHTML(statusHeader)}">${v.isUnpaid ? `<span class="badge badge-inactive">${Utils.escapeHTML(map.memberViewStatusUnpaid || 'Unpaid')}</span>` : `<span class="badge badge-active">${Utils.escapeHTML(map.memberViewStatusPaid || 'Paid')}</span>`}</td>
                                     </tr>
                                 `).join('')}
@@ -246,7 +246,7 @@ Object.assign(App, {
                         <tr>
                             <td data-label="${Utils.escapeHTML(dateHeader)}">${Utils.formatDate(v.entryTime)}</td>
                             <td data-label="${Utils.escapeHTML(entryHeader)}">${Utils.formatTime(v.entryTime)}</td>
-                            <td data-label="${Utils.escapeHTML(durationHeader)}">${Utils.calcDuration(v.entryTime, v.exitTime)}</td>
+                            <td data-label="${Utils.escapeHTML(durationHeader)}">${App.calcVisitDuration(v)}</td>
                         </tr>
                     `).join('');
                 }

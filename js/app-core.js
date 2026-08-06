@@ -330,10 +330,15 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const now = new Date();
                 return Math.floor((expDate - now) / (1000 * 60 * 60 * 24)); 
             },
+            formatDurationMins: (mins) => {
+                if (mins == null || isNaN(mins)) return '';
+                if (mins < 0) mins = 0;
+                return mins >= 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins}m`;
+            },
             calcDuration: (entry, exit) => {
                 if (!exit) return 'In Progress';
                 const mins = Math.round((new Date(exit) - new Date(entry)) / 60000);
-                return mins > 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins}m`;
+                return Utils.formatDurationMins(mins);
             },
             escapeHTML: (str) => { if (!str) return ''; const div = document.createElement('div'); div.innerText = str; return div.innerHTML; },
             renderRichText: (text) => {
@@ -585,6 +590,39 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (windows.length === 0) return true;
                 const t = now.getTime();
                 return windows.some(w => t >= w.from.getTime() && t <= w.until.getTime());
+            },
+
+            // Duration to display for a closed visit. For visits tied to scheduled class(es)
+            // the displayed duration is the class window (earliest class start to latest class
+            // end), independent of the actual check-in/check-out times, so that late check-ins
+            // after a class has finished don't produce a negative duration. Open-gym and other
+            // visits fall back to the entry->exit duration.
+            calcVisitDuration: (visit) => {
+                if (!visit || !visit.id) return Utils.calcDuration(visit && visit.entryTime, visit && visit.exitTime);
+                if (!visit.exitTime) return 'In Progress';
+                const checkins = DB.getClassCheckins().filter(c => c.visitId === visit.id);
+                if (checkins.length === 0) return Utils.calcDuration(visit.entryTime, visit.exitTime);
+                let minStart = null;
+                let maxEnd = null;
+                checkins.forEach(c => {
+                    const start = App.getClassStartTime(c);
+                    if (!start) return;
+                    if (!minStart || start.getTime() < minStart.getTime()) minStart = start;
+                    let end = null;
+                    if (c.slotEnd) {
+                        const t = c.slotEnd.split(':').map(Number);
+                        end = new Date(start.getFullYear(), start.getMonth(), start.getDate(), t[0] || 0, t[1] || 0, 0, 0);
+                    }
+                    if (!end || isNaN(end.getTime())) {
+                        // Fallback: assume a 1-hour class duration
+                        end = new Date(start.getTime() + 60 * 60 * 1000);
+                    }
+                    if (!maxEnd || end.getTime() > maxEnd.getTime()) maxEnd = end;
+                });
+                if (minStart && maxEnd) {
+                    return Utils.formatDurationMins(Math.round((maxEnd.getTime() - minStart.getTime()) / 60000));
+                }
+                return Utils.calcDuration(visit.entryTime, visit.exitTime);
             },
 
             // Determine whether a visit created for this member should be marked unpaid by default

@@ -216,7 +216,7 @@
                 <div class="flex justify-between align-center" style="flex-wrap: wrap; gap: 1rem;">
                     <div>
                         <h1>Staff Check-in</h1>
-                        <p class="text-gray">Search members by name, ID, or phone, and override expired memberships.</p>
+                        <p class="text-gray">Search members by name, ID, or phone, override expired memberships, and record training sessions from past days.</p>
                     </div>
                 </div>
                 <div class="checkin-layout mt-2">
@@ -1194,6 +1194,14 @@
             </div>
             <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
             <div id="admin-checkin-member-summary" class="mb-2" style="background: var(--light); padding: 0.75rem 1rem; border-radius: var(--border-radius); border: 1px solid var(--gray-light); font-size: 0.95rem;"></div>
+            <div class="mb-2" style="background: var(--light); padding: 0.75rem 1rem; border-radius: var(--border-radius); border: 1px solid var(--gray-light);">
+                <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                    <label for="admin-checkin-classes-date-input" class="text-gray font-bold" style="flex-shrink:0;">Training Date</label>
+                    <input type="date" id="admin-checkin-classes-date-input" style="flex:1; min-width:150px;" onchange="App.renderAdminCheckinClassList(this.value)">
+                    <button id="admin-checkin-classes-today-btn" class="btn-outline btn-small hidden" onclick="App.resetAdminCheckinClassDate()">Back to Today</button>
+                </div>
+                <p id="admin-checkin-classes-date-hint" class="text-gray hidden" style="font-size:0.8rem; margin:0.5rem 0 0 0;">Recording a past session — this check-in will be logged on the selected date.</p>
+            </div>
             <div id="admin-checkin-classes-content" style="max-height: 320px; overflow-y: auto;"></div>
             <div id="admin-checkin-classes-open-menu" class="checkin-open-menu hidden"></div>
             <p id="admin-checkin-classes-note" class="text-gray mt-2" style="font-size: 0.95rem;">Select the class(es) this member is attending, or leave empty for an open-gym check-in.</p>

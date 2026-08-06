@@ -165,34 +165,62 @@ Object.assign(App, {
                         </div>
                     </div>`;
 
-                const todayDate = new Date();
-                const todayIso = todayDate.toISOString().split('T')[0];
-                const todayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][todayDate.getDay()];
+                const todayIso = new Date().toISOString().split('T')[0];
+                const dateInput = document.getElementById('admin-checkin-classes-date-input');
+                if (dateInput) {
+                    dateInput.max = todayIso;
+                    dateInput.value = todayIso;
+                }
+                App.renderAdminCheckinClassList(todayIso);
+                App.openModal('modal-admin-checkin-classes');
+            },
+
+            renderAdminCheckinClassList: (dateIso) => {
+                const modal = document.getElementById('modal-admin-checkin-classes');
+                const content = document.getElementById('admin-checkin-classes-content');
+                const note = document.getElementById('admin-checkin-classes-note');
+                const openMenu = document.getElementById('admin-checkin-classes-open-menu');
+                const dateInput = document.getElementById('admin-checkin-classes-date-input');
+                const todayBtn = document.getElementById('admin-checkin-classes-today-btn');
+                const hint = document.getElementById('admin-checkin-classes-date-hint');
+                if (!modal || !content || !note || !App.pendingAdminCheckin) return;
+
+                const member = App.pendingAdminCheckin.member;
+                const todayIso = new Date().toISOString().split('T')[0];
+                const selectedDateIso = dateIso || todayIso;
+                const isToday = selectedDateIso === todayIso;
+
+                if (dateInput) dateInput.value = selectedDateIso;
+                if (todayBtn) todayBtn.classList.toggle('hidden', isToday);
+                if (hint) hint.classList.toggle('hidden', isToday);
+
+                const selectedDate = new Date(selectedDateIso + 'T12:00:00');
+                const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][selectedDate.getDay()];
                 const schedules = (DB.getSchedules() || []).filter(cls => cls.isPublic !== false);
-                const todaySlotEntries = [];
+                const slotEntries = [];
                 const alreadyCheckedInSlotIds = new Set(DB.getClassCheckins()
-                    .filter(checkin => checkin.memberId === member.id && checkin.slotDate === todayIso)
+                    .filter(checkin => checkin.memberId === member.id && checkin.slotDate === selectedDateIso)
                     .map(checkin => App.normalizeScheduleSlotId(checkin.classId, checkin.slotDay, checkin.slotStart, checkin.slotEnd)));
 
                 schedules.forEach(cls => {
                     (cls.slots || []).forEach(slot => {
-                        if (slot.day !== todayName) return;
+                        if (slot.day !== dayName) return;
                         const slotId = App.normalizeScheduleSlotId(cls.id, slot.day, slot.start, slot.end);
-                        todaySlotEntries.push({ ...cls, slot, slotId, alreadyCheckedIn: alreadyCheckedInSlotIds.has(slotId) });
+                        slotEntries.push({ ...cls, slot, slotId, alreadyCheckedIn: alreadyCheckedInSlotIds.has(slotId) });
                     });
                 });
 
-                if (todaySlotEntries.length === 0) {
-                    content.innerHTML = `<p class="text-gray" style="padding: 1rem 0;">No classes are scheduled today. Confirm to record an open-gym check-in.</p>`;
+                if (slotEntries.length === 0) {
+                    content.innerHTML = `<p class="text-gray" style="padding: 1rem 0;">${isToday ? 'No classes are scheduled today.' : 'No classes are scheduled on this date.'} Confirm to record an open-gym check-in.</p>`;
                     note.innerText = 'You can still confirm this check-in without a class.';
                 } else {
-                    const sorted = todaySlotEntries.sort((a, b) => {
+                    const sorted = slotEntries.sort((a, b) => {
                         if (a.slot.start !== b.slot.start) return a.slot.start.localeCompare(b.slot.start);
                         return a.name.localeCompare(b.name);
                     });
                     const availableCount = sorted.filter(entry => !entry.alreadyCheckedIn).length;
                     content.innerHTML = `<div class="checkin-class-grid">${sorted.map(entry => {
-                        const dateDisplay = Utils.formatDateLocalized(todayIso);
+                        const dateDisplay = Utils.formatDateLocalized(selectedDateIso);
                         const timeDisplay = `${Utils.convertTo12Hour(entry.slot.start)} - ${Utils.convertTo12Hour(entry.slot.end)}`;
                         const cardClass = `checkin-class-card${entry.alreadyCheckedIn ? ' disabled' : ''}`;
                         const actionText = entry.alreadyCheckedIn ? 'Already Checked In' : 'Select';
@@ -200,7 +228,7 @@ Object.assign(App, {
                         const onclickAttr = entry.alreadyCheckedIn ? '' : `onclick="App.toggleAdminCheckinClass('${entry.slotId}')"`;
                         return `
                             <div id="admin-checkin-class-card-${entry.slotId}" class="${cardClass}" ${onclickAttr} style="border-left: 6px solid ${entry.color || '#2563eb'};">
-                                <input type="checkbox" name="admin-checkin-class" value="${entry.slotId}" data-class-id="${Utils.escapeHTML(entry.id)}" data-slot-day="${Utils.escapeHTML(entry.slot.day)}" data-slot-start="${Utils.escapeHTML(entry.slot.start)}" data-slot-end="${Utils.escapeHTML(entry.slot.end)}" data-slot-date="${todayIso}" ${entry.alreadyCheckedIn ? 'disabled' : ''} hidden>
+                                <input type="checkbox" name="admin-checkin-class" value="${entry.slotId}" data-class-id="${Utils.escapeHTML(entry.id)}" data-slot-day="${Utils.escapeHTML(entry.slot.day)}" data-slot-start="${Utils.escapeHTML(entry.slot.start)}" data-slot-end="${Utils.escapeHTML(entry.slot.end)}" data-slot-date="${selectedDateIso}" ${entry.alreadyCheckedIn ? 'disabled' : ''} hidden>
                                 <div style="display:flex; justify-content:space-between; align-items:center; gap: 0.75rem; flex-wrap: wrap;">
                                     <strong>${Utils.escapeHTML(entry.name)}</strong>
                                     <span class="badge badge-inside checkin-class-action-badge" style="font-size:0.8rem; ${actionStyle}">${Utils.escapeHTML(actionText)}</span>
@@ -212,25 +240,51 @@ Object.assign(App, {
                     }).join('')}</div>`;
                     note.innerText = availableCount > 0
                         ? 'Select one or more classes for this check-in, or leave empty for an open-gym check-in.'
-                        : 'This member is already checked into all classes scheduled today. You can still confirm an open-gym check-in.';
+                        : isToday
+                            ? 'This member is already checked into all classes scheduled today. You can still confirm an open-gym check-in.'
+                            : 'This member is already checked into all classes scheduled on this date. You can still confirm an open-gym check-in.';
                 }
 
                 // Hidden menu: allow checking in without choosing a class (open gym), shown only when there are classes to pick from.
-                const openMenu = document.getElementById('admin-checkin-classes-open-menu');
                 if (openMenu) {
-                    const showMenu = todaySlotEntries.length > 0;
+                    const showMenu = slotEntries.length > 0;
                     openMenu.classList.toggle('hidden', !showMenu);
                     openMenu.innerHTML = showMenu ? `
                         <details class="checkin-open-details">
-                            <summary class="checkin-open-summary">Not taking a class today?</summary>
+                            <summary class="checkin-open-summary">${isToday ? 'Not taking a class today?' : 'Not taking a class on this date?'}</summary>
                             <div class="checkin-open-body">
                                 <p class="text-gray">Check this member in for open gym time without selecting a class.</p>
                                 <button class="btn-outline w-full" style="font-weight:600;" onclick="App.adminCheckinWithoutClass()">Check In Without a Class (Open Gym)</button>
                             </div>
                         </details>` : '';
                 }
+            },
 
-                App.openModal('modal-admin-checkin-classes');
+            resetAdminCheckinClassDate: () => {
+                const dateInput = document.getElementById('admin-checkin-classes-date-input');
+                if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+                App.renderAdminCheckinClassList(dateInput ? dateInput.value : '');
+            },
+
+            // Build the entry timestamp for an admin check-in. For today the check-in is recorded
+            // at the current time (existing behavior). For a backdated training session it uses the
+            // earliest selected class start on that date, or the current clock time on that date for
+            // open-gym check-ins.
+            buildAdminBackdatedEntryIso: (selectedDateIso, selectedClasses = [], todayIso) => {
+                const now = new Date();
+                if (selectedDateIso === todayIso) return now.toISOString();
+                const [y, mo, d] = selectedDateIso.split('-').map(Number);
+                if (selectedClasses && selectedClasses.length > 0) {
+                    let earliestMs = Infinity;
+                    selectedClasses.forEach(sel => {
+                        if (!sel.slotStart) return;
+                        const [sh, sm] = sel.slotStart.split(':').map(Number);
+                        const start = new Date(y, mo - 1, d, sh, sm, 0, 0);
+                        if (start.getTime() < earliestMs) earliestMs = start.getTime();
+                    });
+                    if (isFinite(earliestMs)) return new Date(earliestMs).toISOString();
+                }
+                return new Date(y, mo - 1, d, now.getHours(), now.getMinutes(), now.getSeconds()).toISOString();
             },
 
             adminCheckinWithoutClass: () => {
@@ -273,14 +327,21 @@ Object.assign(App, {
                 App.autoCheckoutStaleVisits();
                 const visits = DB.getVisits();
                 const now = new Date();
-                const entryIso = now.toISOString();
+                const todayIso = now.toISOString().split('T')[0];
+                const dateInput = document.getElementById('admin-checkin-classes-date-input');
+                const selectedDateIso = dateInput && dateInput.value ? dateInput.value : todayIso;
+                const isBackdated = selectedDateIso !== todayIso;
+                const entryIso = App.buildAdminBackdatedEntryIso(selectedDateIso, selectedClasses, todayIso);
                 const expected = App.computeExpectedExitTime(entryIso, selectedClasses, selectedClasses.length === 0);
                 const classIds = [...new Set(selectedClasses.map(sel => sel.classId))];
 
                 // If the member is already inside an active visit, keep that visit open and attach the
                 // new class(es) to it, so back-to-back classes all display next to the member's name.
+                // Backdated sessions always create their own visit so they never merge with a live visit.
                 let visitId;
-                const activeVisit = visits.find(v => v.memberId === member.id && !v.exitTime && v.expectedExitTime && new Date(v.expectedExitTime) > now);
+                const activeVisit = !isBackdated
+                    ? visits.find(v => v.memberId === member.id && !v.exitTime && v.expectedExitTime && new Date(v.expectedExitTime) > now)
+                    : null;
                 if (activeVisit) {
                     visitId = activeVisit.id;
                     if (new Date(expected).getTime() > new Date(activeVisit.expectedExitTime).getTime()) {
@@ -289,9 +350,11 @@ Object.assign(App, {
                     activeVisit.classIds = [...new Set([...(activeVisit.classIds || []), ...classIds])];
                     activeVisit.isUnpaid = !!(activeVisit.isUnpaid || isUnpaidVisit);
                 } else {
-                    // Close any legacy open visit at this entry time to avoid duplicates
-                    const prevOpen = visits.find(v => v.memberId === member.id && !v.exitTime);
-                    if (prevOpen) prevOpen.exitTime = entryIso;
+                    // Close any legacy open visit at this entry time to avoid duplicates (live check-ins only)
+                    if (!isBackdated) {
+                        const prevOpen = visits.find(v => v.memberId === member.id && !v.exitTime);
+                        if (prevOpen) prevOpen.exitTime = entryIso;
+                    }
                     visitId = 'V-' + Date.now();
                     visits.push({ id: visitId, memberId: member.id, entryTime: entryIso, expectedExitTime: expected, exitTime: null, isUnpaid: isUnpaidVisit, classIds });
                 }
@@ -334,6 +397,9 @@ Object.assign(App, {
                 document.getElementById('checkin-search').value = '';
                 document.getElementById('checkin-member-card').classList.add('hidden');
                 App.renderLivePresent();
+                // Backdated sessions happened in the past, so finalize them immediately so they
+                // appear as completed entries in the check-in log rather than lingering open.
+                if (isBackdated) App.autoCheckoutStaleVisits();
             },
 
             getCheckinQRUrl: () => {

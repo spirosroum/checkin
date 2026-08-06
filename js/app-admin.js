@@ -176,7 +176,7 @@ Object.assign(App, {
                         <td data-label="Belt">${Utils.getBeltBadge(m.belt)}</td>
                         <td data-label="Entry & Duration">
                             <div>${Utils.formatTime(v.entryTime)} ${v.exitTime ? ` - ${Utils.formatTime(v.exitTime)}` : '(Inside)'}</div>
-                            <div class="text-gray" style="font-size:0.8rem;">${Utils.calcDuration(v.entryTime, v.exitTime)}</div>
+                            <div class="text-gray" style="font-size:0.8rem;">${App.calcVisitDuration(v)}</div>
                         </td>
                         <td data-label="Status">${statusHtml}</td>
                         <td data-label="Action" class="cell-actions"><button class="btn-outline btn-small" onclick="App.openVisitEditModal('${v.id}')">Edit</button></td>
