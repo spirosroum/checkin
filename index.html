@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymDesk MVP - Local Management</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- KIOSK VIEW -->
+    <div id="view-kiosk" class="kiosk-wrapper">
+        <div id="kiosk-drawer-overlay" class="portal-drawer-overlay" onclick="App.toggleKioskMenu()"></div>
+        <div id="kiosk-drawer" class="portal-drawer" aria-hidden="true">
+            <div class="portal-drawer-header">
+                <h2 id="kiosk-drawer-title" class="portal-drawer-title">🥋 BJJ Kiosk Portal</h2>
+                <button class="portal-drawer-close-btn" onclick="App.toggleKioskMenu()" aria-label="Close menu">✕</button>
+            </div>
+            <div class="portal-drawer-section" id="kiosk-drawer-section-menu">Menu</div>
+            <div class="portal-drawer-item" id="kiosk-drawer-plans" onclick="App.toggleKioskMenu(); App.showPublicPlans();">View Plans</div>
+            <div class="portal-drawer-item" id="kiosk-drawer-classes" onclick="App.toggleKioskMenu(); App.showPublicClasses();">Available Classes</div>
+            <div class="portal-drawer-item" id="kiosk-drawer-login" onclick="App.toggleKioskMenu(); App.openModal('modal-login');">Member Login</div>
+            <div class="portal-drawer-section" id="kiosk-drawer-section-lang">Language</div>
+            <div class="portal-drawer-item" id="kiosk-drawer-lang" onclick="App.toggleLanguage()">🇬🇧 English</div>
+        </div>
+        <div class="kiosk-header flex justify-between align-center" style="flex-wrap: wrap; gap: 1rem;">
+            <h1 id="kiosk-title-display" style="margin:0; min-width:0;">🥋 BJJ Kiosk Portal</h1>
+            <div class="flex gap-1 kiosk-header-actions" style="flex-wrap: wrap; align-items: center;">
+                <button id="kiosk-menu-btn" class="btn-outline portal-menu-toggle" onclick="App.toggleKioskMenu()" aria-label="Open menu" title="Menu">☰</button>
+            </div>
+        </div>
+        <div class="kiosk-main">
+            <!-- Broadcast check-in notice -->
+            <div id="kiosk-broadcast-notice" class="kiosk-notice-banner hidden">
+                <div class="kiosk-notice-content">
+                    <p id="kiosk-broadcast-notice-text"></p>
+                </div>
+            </div>
+
+            <div class="kiosk-input-card flex-col align-center" style="height: 100%;">
+                <h2>Member Check-In</h2>
+                <p class="text-gray mt-1" style="font-size: 1.1rem;">Scan or enter your Member ID to check in.</p>
+                <input type="text" id="kiosk-id-input" readonly inputmode="none" class="search-bar mt-2" placeholder="󠁯•󠁏󠁏󠁯•󠁏󠁏󠁯•󠁏󠁏󠁯•󠁏󠁏" maxlength="8" pattern="\d*" style="font-size: 3rem; text-align: center; letter-spacing: 5px; width: 80%; max-width: 300px;" onkeyup="if(event.key === 'Enter') App.kioskSubmit()">
+                
+                <!-- Numpad -->
+                <div class="kiosk-numpad mt-2">
+                    <button onclick="App.numpadPress('1')">1</button>
+                    <button onclick="App.numpadPress('2')">2</button>
+                    <button onclick="App.numpadPress('3')">3</button>
+                    <button onclick="App.numpadPress('4')">4</button>
+                    <button onclick="App.numpadPress('5')">5</button>
+                    <button onclick="App.numpadPress('6')">6</button>
+                    <button onclick="App.numpadPress('7')">7</button>
+                    <button onclick="App.numpadPress('8')">8</button>
+                    <button onclick="App.numpadPress('9')">9</button>
+                    <button onclick="App.numpadPress('clear')" style="font-size: 1rem; color: var(--danger);">Clear</button>
+                    <button onclick="App.numpadPress('0')">0</button>
+                    <button onclick="App.numpadPress('back')" style="font-size: 1rem;">Back</button>
+                    <button onclick="App.kioskSubmit()" class="btn-enter">Check In</button>
+                </div>
+
+                <button onclick="App.kioskSubmit()" class="btn-primary btn-large mt-2 desktop-checkin-btn" style="width: 80%; max-width: 300px;">Check In</button>
+                <div id="kiosk-message" class="kiosk-msg hidden"></div>
+            </div>
+
+            <div class="card" style="height: 100%; padding: 0;">
+                <div class="flex justify-between align-center" style="padding: 1.5rem 1.5rem 1rem 1.5rem;">
+                    <h3 style="font-size: 1.5rem; margin:0;">Currently Inside</h3>
+                    <span class="badge badge-inside" id="kiosk-present-count" style="font-size: 1.2rem;">0</span>
+                </div>
+                <div class="table-responsive" style="max-height: 330px; overflow-y: auto; border: none; border-top: 1px solid var(--gray-light); border-radius: 0;">
+                    <table class="table-inside">
+                        <tbody id="kiosk-present-list"></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="card" style="grid-column: 1 / -1; padding: 0; overflow: hidden; border: 1px solid var(--gray-light);">
+                <div style="padding: 1.5rem 1.5rem 1rem 1.5rem; border-bottom: 1px solid var(--gray-light); background: #f8fafc;">
+                    <h3 style="font-size: 1.5rem; margin:0;">Gym Schedule</h3>
+                </div>
+                <!-- FIXED SCHEDULE SCROLLABLE CONTAINER -->
+                <div class="calendar-wrapper" style="border:none; border-radius: 0;">
+                    <div id="kiosk-schedule-container" style="background: var(--white); overflow-x: auto; overflow-y: auto; max-height: 500px;"></div>
+                </div>
+            </div>
+            <div class="card" style="grid-column: 1 / -1; padding: 1.25rem; max-height: 360px; overflow: hidden; border: 1px solid var(--gray-light);">
+                <div class="flex justify-between align-center" style="padding-bottom: 0.75rem; border-bottom: 1px solid var(--gray-light);">
+                    <div>
+                        <h3 id="kiosk-leaderboard-title" style="margin: 0; font-size: 1.25rem;">Top Trainings</h3>
+                        <p id="kiosk-leaderboard-subtitle" class="text-gray" style="margin: 0; font-size: 0.95rem;">Most active members in the last 3 months.</p>
+                    </div>
+                    <span id="kiosk-leaderboard-badge" class="badge badge-inside" style="background: #eef2ff; color: #1e3a8a;">Leaderboard</span>
+                </div>
+                <div id="kiosk-leaderboard-container" class="mt-3" style="max-height: 240px; overflow-y: auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KIOSK NOTIFICATION ALERT MODAL -->
+    <div id="modal-kiosk-alert" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 400px; text-align: center; padding: 3rem 2rem; border-top: 5px solid var(--primary);">
+            <h2 id="kiosk-alert-title" style="font-size: 1.75rem; margin-bottom: 1rem;">Notice</h2>
+            <p id="kiosk-alert-msg" style="font-size: 1.2rem; color: var(--dark);"></p>
+            <button onclick="App.closeModal('modal-kiosk-alert')" class="btn-primary w-full mt-4 btn-large">Got it!</button>
+        </div>
+    </div>
+
+    <!-- PUBLIC PLANS MODAL -->
+    <div id="modal-public-plans" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="flex justify-between align-center mb-1">
+                <h2 style="margin: 0;">Available Memberships</h2>
+                <button class="btn-outline" style="padding: 0.25rem 0.75rem;" onclick="App.closeModal('modal-public-plans')">✕</button>
+            </div>
+            <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
+            <div id="public-plans-list" class="flex-col gap-1"></div>
+        </div>
+    </div>
+
+    <!-- PUBLIC CLASSES MODAL -->
+    <div id="modal-public-classes" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="flex justify-between align-center mb-1">
+                <h2 style="margin: 0;">Available Classes</h2>
+                <button class="btn-outline" style="padding: 0.25rem 0.75rem;" onclick="App.closeModal('modal-public-classes')">✕</button>
+            </div>
+            <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
+            <div id="public-classes-list" class="flex-col gap-1"></div>
+        </div>
+    </div>
+
+    <!-- LOGIN MODAL -->
+    <div id="modal-login" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 400px; text-align: center; padding: 3rem 2rem;">
+            <h2 style="font-size: 1.75rem;">Information Access</h2>
+            <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--gray-light);">
+            
+            <h3 style="text-align: left; font-size: 1.1rem;">Member Dashboard</h3>
+            <input type="text" id="member-login-id" placeholder="Enter Member ID" maxlength="8" class="search-bar mt-1" autocomplete="off" style="text-align: center;">
+            <button onclick="App.loginAsMember()" class="btn-primary w-full mt-1">Access Dashboard</button>
+            
+            <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--gray-light);">
+            
+            <h3 style="text-align: left; font-size: 1.1rem;">Admin Portal</h3>
+            <input type="password" id="admin-login-pwd" placeholder="Enter Admin Password" class="search-bar mt-1" autocomplete="off" style="text-align: center; font-size: 1rem;" onkeyup="if(event.key === 'Enter') App.loginAsAdmin()">
+            <button onclick="App.loginAsAdmin()" class="btn-outline w-full mt-1">Enter Admin Portal</button>
+            
+            <button onclick="App.closeModal('modal-login')" class="btn-outline w-full mt-4" style="border: none; color: var(--gray); background: transparent;">← Back to Kiosk</button>
+        </div>
+    </div>
+
+    <!-- VISIT EDIT MODAL -->
+    <div id="modal-visit" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="flex justify-between align-center mb-1">
+                <h2 style="margin:0;">Edit Check-in</h2>
+                <button class="btn-outline" style="padding: 0.25rem 0.75rem;" onclick="App.closeModal('modal-visit')">✕</button>
+            </div>
+            <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
+            
+            <form id="visit-form" class="flex-col gap-1 mt-2">
+                <input type="hidden" id="form-visit-id">
+                <label class="text-gray font-bold">Entry Date & Time</label>
+                <input type="datetime-local" id="form-visit-entry" required>
+                <label class="text-gray font-bold mt-1">Exit Date & Time (Leave empty if still inside)</label>
+                <input type="datetime-local" id="form-visit-exit">
+                
+                <div class="flex gap-2 mt-4" style="border-top: 1px solid var(--gray-light); padding-top: 1.5rem;">
+                    <button type="button" class="btn-danger" id="btn-delete-visit" onclick="App.deleteVisitFromModal()">Delete</button>
+                    <div style="flex: 1;"></div> 
+                    <button type="button" class="btn-outline" onclick="App.closeModal('modal-visit')">Cancel</button>
+                    <button type="submit" class="btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ADMIN VIEW -->
+    <div id="view-admin" class="app-container hidden">
+        <div id="sidebar-overlay" class="sidebar-overlay" onclick="App.toggleSidebar()"></div>
+
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2 class="sidebar-title">🥋 Gym Admin</h2>
+                <button class="sidebar-close-btn" onclick="App.toggleSidebar()" aria-label="Close navigation menu">✕</button>
+            </div>
+            <div class="logout-btn" onclick="App.logout()" style="margin-bottom:0.75rem;">Lock System</div>
+            <div class="sidebar-section">Front Desk</div>
+            <div class="nav-item active" onclick="App.navigate('admin-checkin')">Staff Check-in</div>
+            <div class="nav-item" onclick="App.navigate('admin-dashboard')">Dashboard</div>
+            <div class="nav-item" onclick="App.navigate('admin-notifications')">
+                Notifications 
+                <span id="nav-notif-badge" class="badge badge-inactive hidden">0</span>
+            </div>
+            
+            <div class="sidebar-section">Management</div>
+            <div class="nav-item" onclick="App.navigate('admin-members')">Member Directory</div>
+            <div class="nav-item" onclick="App.navigate('admin-payments')">Payments</div>
+            <div class="nav-item" onclick="App.navigate('admin-schedules')">Training Schedules</div>
+            <div class="nav-item" onclick="App.navigate('admin-plans')">Membership Plans</div>
+            
+            <div class="sidebar-section">System</div>
+            <div class="nav-item" onclick="App.navigate('admin-settings')">General Settings</div>
+            
+        </div>
+
+        <div class="main-content">
+            <div class="mobile-header">
+                <h2 id="mobile-page-title">Admin Portal</h2>
+                <button class="menu-toggle-btn" onclick="App.toggleSidebar()" aria-label="Open navigation menu" title="Open menu">☰</button>
+            </div>
+
+            <!-- Staff Check-in System -->
+            <div id="pane-admin-checkin" class="view-pane">
+                <div class="flex justify-between align-center" style="flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h1>Staff Check-in</h1>
+                        <p class="text-gray">Search members by name, ID, or phone, and override expired memberships.</p>
+                    </div>
+                </div>
+                <div class="checkin-layout mt-2">
+                    <div class="flex-col gap-2">
+                        <input type="text" id="checkin-search" class="search-bar w-full" placeholder="Search ID, Name, or Phone..." autocomplete="off">
+                        <div id="checkin-member-card" class="member-card-display hidden"></div>
+                    </div>
+                    <div class="card">
+                        <h3>Broadcast Check-in Notice</h3>
+                        <p class="text-gray">Create a message that members will see in the portal above the check-in form and currently inside list.</p>
+                        <textarea id="form-checkin-notice" class="notice-textarea" placeholder="Enter notice for members..."></textarea>
+                        <div class="notice-actions">
+                            <div class="notice-color-field">
+                                <label class="text-gray font-bold">Notice Color</label>
+                                <input type="color" id="form-checkin-notice-color" value="#fde68a">
+                            </div>
+                            <div class="notice-buttons">
+                                <button class="btn-primary" onclick="App.saveCheckinNotice()">Save Notice</button>
+                                <button class="btn-outline" onclick="App.clearCheckinNotice()">Clear Notice</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="flex justify-between align-center" style="flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem;">
+                            <div>
+                                <h3 style="margin:0;">Member Self Check-in QR</h3>
+                                <p class="text-gray" style="margin:0.25rem 0 0 0;">Print this QR and place it at the entrance. Members scan it with their phone, pick their class, and check in themselves.</p>
+                            </div>
+                        </div>
+                        <label class="text-gray font-bold">Check-in URL</label>
+                        <div class="flex gap-2 align-center" style="margin-top: 0.35rem;">
+                            <input type="text" id="checkin-qr-url" class="search-bar" style="flex: 1;" placeholder="https://your-portal/index.html?checkin=1" autocomplete="off" oninput="App.renderCheckinQR()">
+                            <button class="btn-outline" onclick="App.copyCheckinQRUrl()">Copy URL</button>
+                        </div>
+                        <div class="flex justify-center" style="margin-top: 1rem;">
+                            <div id="checkin-qr-container" style="background: #fff; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--gray-light);"></div>
+                        </div>
+                        <p id="checkin-qr-hint" class="text-gray" style="font-size: 0.85rem; text-align: center; margin-top: 0.5rem;">First-time members enter their Member ID once; afterwards their phone remembers them.</p>
+                        <button class="btn-outline w-full" style="font-weight:600;" onclick="App.printCheckinQR()">🖨 Print QR</button>
+                    </div>
+                    <div id="admin-checkin-notice" class="kiosk-msg warning hidden"></div>
+                    <div class="card" style="padding: 0;">
+                        <div class="flex justify-between align-center" style="padding: 1.25rem 1.25rem 0.5rem 1.25rem;">
+                            <h3>Currently Present</h3>
+                            <span class="badge badge-inside" id="live-present-count">0</span>
+                        </div>
+                        <div class="table-responsive mobile-cards" style="max-height: 400px; overflow-y: auto; border:none; border-top: 1px solid var(--gray-light); border-radius: 0;">
+                            <table style="width:100%;">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>ID</th>
+                                        <th>Belt</th>
+                                        <th>Entry & Duration</th>
+                                        <th>Status</th>
+                                        <th style="width: 100px;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="live-present-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard & Log -->
+            <div id="pane-admin-dashboard" class="view-pane hidden">
+                <div class="flex justify-between align-center" style="flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h1>Dashboard</h1>
+                        <p class="text-gray">Today's activity overview and check-in logs.</p>
+                    </div>
+                </div>
+
+                <div class="tabs mt-2">
+                    <div class="tab tab-link-dashboard active" id="tab-link-dashboard-overview" onclick="App.switchTab('dashboard', 'overview')">Overview</div>
+                    <div class="tab tab-link-dashboard" id="tab-link-dashboard-log" onclick="App.switchTab('dashboard', 'log')">Check-in Log</div>
+                </div>
+
+                <!-- OVERVIEW TAB -->
+                <div id="tab-content-dashboard-overview" class="tab-content-dashboard mt-1">
+                    <p class="text-gray mb-2">Live snapshot of today's activity, attendance counts, and a monthly check-in calendar.</p>
+                    <div class="dashboard-grid mb-2" id="admin-stats-grid"></div>
+
+                    <div class="card mt-2 mb-2">
+                        <div class="flex justify-between align-center mb-1" style="flex-wrap: wrap; gap: 1rem;">
+                            <div>
+                                <h3>Check-in Activity Calendar</h3>
+                                <p class="text-gray">Monthly analytical view of gym check-ins for real members. Click on a day to view details.</p>
+                            </div>
+                            <div class="flex gap-2 align-center">
+                                <input type="month" id="export-month-picker" style="max-width: 180px;">
+                                <button class="btn-success btn-small" onclick="App.exportMonthlyExcel()">📊 Export Monthly Excel</button>
+                            </div>
+                        </div>
+                        <div id="analytical-calendar-container" class="mt-2"></div>
+                    </div>
+                </div>
+
+                <!-- CHECK-IN LOG TAB -->
+                <div id="tab-content-dashboard-log" class="tab-content-dashboard hidden mt-1">
+                    <p class="text-gray mb-2">Filter, review, and edit check-in history.</p>
+                    <div class="card">
+                        <div class="flex gap-2 align-center mb-2" style="background: var(--light); padding: 1rem; border-radius: var(--border-radius); border: 1px solid var(--gray-light); flex-wrap: wrap;">
+                            <div style="flex:1; min-width: 150px;">
+                                <label class="text-gray"><strong>Start Date</strong></label>
+                                <input type="date" id="filter-visit-start" onchange="App.renderVisitLog()" class="mt-1">
+                            </div>
+                            <div style="flex:1; min-width: 150px;">
+                                <label class="text-gray"><strong>End Date</strong></label>
+                                <input type="date" id="filter-visit-end" onchange="App.renderVisitLog()" class="mt-1">
+                            </div>
+                            <div style="flex:1; min-width: 150px;">
+                                <label class="text-gray"><strong>Status Filter</strong></label>
+                                <select id="filter-visit-status" onchange="App.renderVisitLog()" class="mt-1">
+                                    <option value="all">All Check-ins</option>
+                                    <option value="active">Active Memberships Only</option>
+                                    <option value="unpaid">Unpaid / Expired Check-ins Only</option>
+                                </select>
+                            </div>
+                            <div style="padding-top: 1.5rem;">
+                                <button class="btn-outline" onclick="document.getElementById('filter-visit-start').value=''; document.getElementById('filter-visit-end').value=''; document.getElementById('filter-visit-status').value='all'; App.renderVisitLog();">Clear Filters</button>
+                            </div>
+                        </div>
+                        
+                        <div class="dashboard-grid mt-2 mb-2" id="visit-summary-grid"></div>
+
+                        <!-- Scrollable container for the visit history table -->
+                        <div style="max-height: 600px; overflow-y: auto; border-radius: var(--border-radius); border: 1px solid var(--gray-light); padding-bottom: 1rem;">
+                            
+                            <h3 style="padding: 1rem 1rem 0 1rem;">Visit History</h3>
+                            <div class="table-responsive mobile-cards" style="border:none; margin-bottom: 2rem;">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Member Name</th>
+                                            <th>Belt</th>
+                                            <th>Entry & Duration</th>
+                                            <th>Status</th>
+                                            <th style="width: 150px;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="visit-log-list"></tbody>
+                                </table>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notifications -->
+            <div id="pane-admin-notifications" class="view-pane hidden">
+                <div class="flex justify-between align-center" style="flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h1>Notifications</h1>
+                        <p class="text-gray">System alerts, expired check-in attempts, and general notices.</p>
+                    </div>
+                    <button class="btn-outline btn-small" onclick="App.clearAllNotifications()">Clear All</button>
+                </div>
+
+                <div class="tabs mt-2">
+                    <div class="tab tab-link-notifications active" id="tab-link-notifications-list" onclick="App.switchTab('notifications', 'list')">Inbox</div>
+                    <div class="tab tab-link-notifications" id="tab-link-notifications-bin" onclick="App.switchTab('notifications', 'bin')">Recycle Bin</div>
+                </div>
+
+                <div id="tab-content-notifications-list" class="tab-content-notifications mt-1">
+                    <p class="text-gray mb-2">Read and manage system alerts, expired check-in attempts, and general notices.</p>
+                    <div id="notifications-list" class="flex-col gap-1"></div>
+                </div>
+
+                <div id="tab-content-notifications-bin" class="tab-content-notifications hidden mt-1">
+                    <p class="text-gray mb-2">Recover notifications that were deleted before permanent removal.</p>
+                    <div class="card">
+                        <h3>Deleted Notifications</h3>
+                        <div id="notifications-bin-list" class="flex-col gap-1"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Member Directory -->
+            <div id="pane-admin-members" class="view-pane hidden">
+                <div class="flex justify-between align-center" style="flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h1>Member Directory</h1>
+                        <p class="text-gray">Manage your entire student roster.</p>
+                    </div>
+                    <div class="flex gap-1" style="flex-wrap: wrap;">
+                        <button class="btn-outline" onclick="App.openExportModal()" style="display: flex; align-items: center; gap: 0.4rem;">📥 Export</button>
+                        <button class="btn-warning" onclick="App.massFreeze()">Mass Freeze</button>
+                        <button class="btn-success" onclick="App.massUnfreeze()">Mass Unfreeze</button>
+                        <button class="btn-primary" onclick="App.openMemberModal()">+ Add New Member</button>
+                    </div>
+                </div>
+                
+                <input type="text" id="member-directory-search" placeholder="Search all members by name or ID..." class="search-bar mt-2" style="font-size: 1rem; padding: 0.75rem;">
+
+                <div class="tabs mt-2">
+                    <div class="tab tab-link-members active" id="tab-link-members-active" onclick="App.switchDirStatus('active')">Active Members</div>
+                    <div class="tab tab-link-members" id="tab-link-members-inactive" onclick="App.switchDirStatus('inactive')">Inactive Members</div>
+                    <div class="tab tab-link-members" id="tab-link-members-frozen" onclick="App.switchDirStatus('frozen')">Frozen Members</div>
+                    <div class="tab tab-link-members" id="tab-link-members-history" onclick="App.switchTab('members', 'history')">Training History</div>
+                    <div class="tab tab-link-members" id="tab-link-members-bin" onclick="App.switchTab('members', 'bin')">Recycle Bin</div>
+                </div>
+
+                <div id="tab-content-members-directory" class="tab-content-members mt-1">
+                    <div class="card">
+                        <details style="background: var(--light); padding: 0.75rem 1rem; border-radius: var(--border-radius); border: 1px solid var(--gray-light); margin-bottom: 0.75rem;">
+                            <summary class="text-gray cursor-pointer" style="font-weight: 600; list-style-type: '⚙️ ';">Adjust Visible Columns (Drag to reorder)</summary>
+                            <div class="day-picker mt-1" id="column-order-container"></div>
+                        </details>
+                        
+                        <div class="table-responsive mobile-cards">
+                            <table>
+                                <thead>
+                                    <tr id="directory-headers"></tr>
+                                </thead>
+                                <tbody id="member-directory-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-content-members-history" class="tab-content-members hidden mt-1">
+                    <p class="text-gray mb-2">Search any member to review their training and check-in history.</p>
+                    <div class="card">
+                        <input type="text" id="dashboard-history-search" class="search-bar w-full mt-1 mb-2" placeholder="Search Member by Name or ID..." oninput="App.searchDashboardHistory()">
+                        <div id="dashboard-history-results" class="mb-2"></div>
+                        <div id="dashboard-history-container"></div>
+                    </div>
+                </div>
+
+                <div id="tab-content-members-bin" class="tab-content-members hidden mt-1">
+                    <p class="text-gray mb-2">Recover or permanently remove members before they are automatically deleted after 1 year.</p>
+                    <div class="card">
+                        <h3>Deleted Members</h3>
+                        <div class="table-responsive mobile-cards">
+                            <table>
+                                <thead><tr><th>ID</th><th>Name</th><th>Belt</th><th>Deleted Date</th><th>Action</th></tr></thead>
+                                <tbody id="member-bin-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payments -->
+            <div id="pane-admin-payments" class="view-pane hidden">
+                <div class="flex justify-between align-center" style="flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h1>Payments</h1>
+                        <p class="text-gray">Track membership payments, renewals, and revenue in the payment ledger.</p>
+                    </div>
+                    <button class="btn-primary btn-small" onclick="App.openPaymentModal()">+ Add Payment</button>
+                </div>
+
+                <div class="card mt-2">
+                    <h3>Payment Ledger</h3>
+                    <div class="table-responsive mobile-cards mt-1">
+                        <table>
+                            <thead><tr><th>Date</th><th>Member Name</th><th>Amount</th><th>New Exp. Date</th><th>Note</th><th>Action</th></tr></thead>
+                            <tbody id="all-payments-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Membership Plans Interface -->
+            <div id="pane-admin-plans" class="view-pane hidden">
+                <div class="flex justify-between align-center" style="flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h1>Membership Plans</h1>
+                        <p class="text-gray">Manage packages, colors, and configure closed academy days.</p>
+                    </div>
+                </div>
+                
+                <div class="tabs mt-2">
+                    <div class="tab tab-link-plans active" id="tab-link-plans-list" onclick="App.switchTab('plans', 'list')">Active Plans</div>
+                    <div class="tab tab-link-plans" id="tab-link-plans-create" onclick="App.switchTab('plans', 'create')">Add / Edit Plan</div>
+                    <div class="tab tab-link-plans" id="tab-link-plans-closed" onclick="App.switchTab('plans', 'closed')">Academy Closed Dates</div>
+                    <div class="tab tab-link-plans" id="tab-link-plans-bin" onclick="App.switchTab('plans', 'bin')">Recycle Bin</div>
+                </div>
+
+                <!-- Active Plans List -->
+                <div id="tab-content-plans-list" class="tab-content-plans mt-1">
+                    <p class="text-gray mb-2">Review, reorder, and edit all membership plans.</p>
+                    <div class="card" style="padding:0;">
+                        <div class="table-responsive mobile-cards" style="border:none; border-radius: var(--border-radius);">
+                            <table>
+                                <thead><tr><th>Plan Name</th><th>Validity (Days)</th><th>Sessions</th><th>Visible on Kiosk</th><th id="label-plan-price-th">Price</th><th style="width: 70px;">Drag</th></tr></thead>
+                                <tbody id="plans-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add / Edit Plan -->
+                <div id="tab-content-plans-create" class="tab-content-plans hidden mt-1">
+                    <p class="text-gray mb-2">Create a new membership plan or modify an existing one.</p>
+                    <div class="card" style="max-width: 600px;">
+                        <label class="text-gray font-bold">Select Plan to Edit (or create new)</label>
+                        <select id="select-edit-plan" class="mt-1 mb-2" onchange="if(this.value) { App.editPlan(this.value); } else { App.cancelPlanEdit(); }">
+                            <option value="">-- Create New Plan --</option>
+                        </select>
+                        <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
+                        
+                        <form id="plan-form" class="flex-col gap-1 mt-1">
+                            <input type="hidden" id="form-plan-id">
+                            <label class="text-gray font-bold">Plan Name</label>
+                            <input type="text" id="form-plan-name" required placeholder="e.g. 6 Months Unlimited">
+                            <label class="text-gray font-bold mt-1">Plan Description / Benefits</label>
+                            <textarea id="form-plan-desc" placeholder="Examples:\n**Bold benefit**\n*Italic note*\n- Access to open mats\n- Free trial classes\nUse line breaks to separate bullets and paragraphs."></textarea>
+                            <div class="text-gray text-sm mt-1">Use markdown-style formatting for public descriptions: **bold**, *italic*, bullet lists, and line breaks. Check the box to allow raw HTML when needed.</div>
+                            <label class="flex align-center gap-2 font-bold text-gray mt-1"><input type="checkbox" id="form-plan-desc-html"> Allow raw HTML formatting in description</label>
+                            
+                            <!-- COLOR PALETTE SELECTION -->
+                            <label class="text-gray font-bold mt-1">Plan Color Accent</label>
+                            <div class="color-selection mt-1" style="position: relative;">
+                                <div id="preset-color-palette" class="flex gap-1" style="flex-wrap: wrap;"></div>
+                                <input type="color" id="form-plan-color" value="#2563eb" class="color-picker-input" onchange="App.selectPaletteColor('form-plan-color', 'preset-color-palette', this.value)">
+                            </div>
+ 
+                            <div class="flex gap-2 mt-1" style="flex-wrap: wrap;">
+                                <div style="flex:1; min-width: 170px;">
+                                    <label class="text-gray font-bold">Validity Window (Days)</label>
+                                    <input type="number" id="form-plan-days" min="1" placeholder="e.g. 60">
+                                </div>
+                                <div style="flex:1; min-width: 170px;">
+                                    <label class="text-gray font-bold">Session Count (Optional)</label>
+                                    <input type="number" id="form-plan-sessions" min="1" placeholder="Leave empty for unlimited">
+                                </div>
+                            </div>
+                            <div class="callout mt-1">Enter either a validity window or a session count (or both). If the plan is sessions-only, leave validity blank.</div>
+
+                            <div class="card mt-2" style="border-left: 4px solid var(--primary); padding: 0.75rem 1rem;">
+                                <div class="flex justify-between align-center" style="gap: 1rem;">
+                                    <div>
+                                        <div class="font-bold text-gray">Visible on Member Kiosk</div>
+                                        <p class="text-gray" style="font-size: 0.85rem; margin: 0.15rem 0 0 0;">Show this package on the kiosk&apos;s View Plans screen. Hide it without deleting.</p>
+                                    </div>
+                                    <label class="closed-date-toggle">
+                                        <input type="checkbox" id="form-plan-visible" checked onchange="App.updatePlanVisibilityLabel()">
+                                        <span class="closed-date-toggle-track"></span>
+                                        <span id="form-plan-visible-label" class="closed-date-toggle-label">Visible</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="card mt-1" style="border-left: 4px solid #f59e0b; padding: 0.75rem 1rem;">
+                                <div class="flex justify-between align-center" style="gap: 1rem;">
+                                    <div>
+                                        <div class="font-bold text-gray">Star this plan for prominence</div>
+                                        <p class="text-gray" style="font-size: 0.85rem; margin: 0.15rem 0 0 0;">Highlight this package with a star on the kiosk&apos;s View Plans screen.</p>
+                                    </div>
+                                    <label class="closed-date-toggle">
+                                        <input type="checkbox" id="form-plan-starred" onchange="App.updatePlanStarredLabel()">
+                                        <span class="closed-date-toggle-track"></span>
+                                        <span id="form-plan-starred-label" class="closed-date-toggle-label">Standard</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <label class="text-gray font-bold mt-1" id="label-plan-price">Price</label>
+                            <input type="number" id="form-plan-price" required min="0" step="0.01" placeholder="e.g. 800.00">
+                            <div class="flex gap-2 mt-2">
+                                <button type="button" class="btn-danger hidden" id="btn-delete-plan" onclick="App.deletePlanFromModal()">Delete Plan</button>
+                                <div style="flex: 1;"></div>
+                                <button type="button" class="btn-outline hidden" id="btn-cancel-plan-edit" onclick="App.cancelPlanEdit()">Cancel Edit</button>
+                                <button type="submit" class="btn-primary" id="btn-save-plan">Save Plan</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- ACADEMY CLOSED DATES / HOLIDAYS -->
+                <div id="tab-content-plans-closed" class="tab-content-plans hidden mt-1">
+                    <p class="text-gray mb-2">Mark days the academy is closed so they don't count against active memberships.</p>
+                    <div class="card" style="max-width: 700px;">
+                        <h3>Academy Closed Dates & Holidays</h3>
+                        
+                        <div style="background: var(--light); padding: 1rem; border-radius: var(--border-radius); border: 1px solid var(--gray-light);">
+                            <div class="flex gap-2 mb-2" style="flex-wrap: wrap;">
+                                <div style="flex:1; min-width: 150px;">
+                                    <label class="text-gray font-bold">Start Date</label>
+                                    <input type="date" id="form-closed-date" class="mt-1">
+                                </div>
+                                <div style="flex:1; min-width: 150px;">
+                                    <label class="text-gray font-bold">End Date <span class="text-gray" style="font-weight:400;">(optional, for ranges)</span></label>
+                                    <input type="date" id="form-closed-date-end" class="mt-1">
+                                </div>
+                                <div style="flex:2; min-width: 200px;">
+                                    <label class="text-gray font-bold">Reason / Holiday Name</label>
+                                    <input type="text" id="form-closed-reason" placeholder="e.g. Christmas / New Year Break" class="mt-1">
+                                </div>
+                            </div>
+                            <div class="flex gap-2 align-center" style="flex-wrap: wrap;">
+                                <label class="closed-date-toggle" id="closed-repeat-label">
+                                    <input type="checkbox" id="form-closed-repeat">
+                                    <span class="closed-date-toggle-track"></span>
+                                    <span class="closed-date-toggle-label">Repeat every year</span>
+                                </label>
+                                <div style="flex:1;"></div>
+                                <button type="button" class="btn-primary" onclick="App.addClosedDate()">+ Add Closed Date</button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive mobile-cards">
+                            <table>
+                                <thead><tr><th>Date / Range</th><th>Holiday / Reason</th><th>Repeats</th><th style="width: 100px;">Action</th></tr></thead>
+                                <tbody id="closed-dates-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recycle Bin -->
+                <div id="tab-content-plans-bin" class="tab-content-plans hidden mt-1">
+                        <p class="text-gray mb-2">Recover membership plans that were accidentally deleted.</p>
+                        <div class="card">
+                            <h3>Deleted Plans</h3>
+                            <div class="table-responsive mobile-cards">
+                                <table>
+                                    <thead><tr><th>Plan Name</th><th>Validity (Days)</th><th>Deleted Date</th><th>Action</th></tr></thead>
+                                    <tbody id="plan-bin-list"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                </div>
+            </div>
+
+            <!-- Training Schedules -->
+            <div id="pane-admin-schedules" class="view-pane hidden">
+                <div class="flex justify-between align-center" style="flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h1>Training Schedules</h1>
+                        <p class="text-gray">Manage class schedules and the weekly master calendar.</p>
+                    </div>
+                </div>
+                
+                <div class="tabs mt-2">
+                    <div class="tab tab-link-schedule active" id="tab-link-schedule-list" onclick="App.switchTab('schedule', 'list')">Active Classes</div>
+                    <div class="tab tab-link-schedule" id="tab-link-schedule-builder" onclick="App.switchTab('schedule', 'builder')">Add / Edit Class</div>
+                    <div class="tab tab-link-schedule" id="tab-link-schedule-master" onclick="App.switchTab('schedule', 'master')">Weekly Master Schedule</div>
+                    <div class="tab tab-link-schedule" id="tab-link-schedule-bin" onclick="App.switchTab('schedule', 'bin')">Recycle Bin</div>
+                </div>
+
+                <div id="tab-content-schedule-list" class="tab-content-schedule mt-1">
+                    <p class="text-gray mb-2">Review, reorder, and manage all class schedules.</p>
+                    <div class="card" style="padding:0;">
+                        <div class="table-responsive mobile-cards" style="border:none; border-radius: var(--border-radius);">
+                            <table>
+                                <thead><tr><th>Class</th><th>Schedule</th><th>Visible on Kiosk</th><th style="width: 70px;">Drag</th></tr></thead>
+                                <tbody id="schedule-classes-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <p class="text-gray mt-2" style="text-align: center;">Drag classes to reorder them. This order is also shown to members on the kiosk's Available Classes screen.</p>
+                </div>
+
+                <div id="tab-content-schedule-builder" class="tab-content-schedule hidden mt-1">
+                    <p class="text-gray mb-2">Create a new class or modify an existing one.</p>
+                    <div class="card" style="max-width: 800px;">
+                        <div class="flex justify-between align-center">
+                            <h3 id="schedule-builder-title">Add / Edit Class</h3>
+                            <button type="button" class="btn-danger btn-small hidden" id="btn-delete-schedule" onclick="App.deleteScheduleDirect()">Delete Full Class</button>
+                        </div>
+                        
+                        <div class="flex-col gap-1 mt-1">
+                            <input type="hidden" id="form-sched-id">
+                            <input type="hidden" id="draft-editing-id">
+                            <label class="text-gray">Class Name (e.g., Fundamentals)</label>
+                            <input type="text" id="form-sched-class-name" placeholder="Enter class name...">
+                            <label class="text-gray font-bold mt-1">Class Description</label>
+                            <textarea id="form-sched-desc" placeholder="Describe this class for members..."></textarea>
+                            <label class="text-gray font-bold mt-1">Practitioners / Members</label>
+                            <input type="text" id="form-sched-practitioners" placeholder="e.g. Coach Ali, Coach Maria">
+                            <label class="text-gray font-bold mt-1">Class Requirements</label>
+                            <textarea id="form-sched-requirements" placeholder="Enter class requirements or member instructions..."></textarea>
+                            <label class="text-gray font-bold mt-1">Class Color Accent</label>
+                            <div class="color-selection mt-1" style="position: relative;">
+                                <div id="preset-sched-color-palette" class="flex gap-1 mt-1" style="flex-wrap: wrap;"></div>
+                                <input type="color" id="form-sched-color" value="#2563eb" class="color-picker-input" onchange="App.selectPaletteColor('form-sched-color', 'preset-sched-color-palette', this.value)">
+                            </div>
+
+                            <div class="card mt-2" style="border-left: 4px solid var(--primary); padding: 0.75rem 1rem;">
+                                <div class="flex justify-between align-center" style="gap: 1rem;">
+                                    <div>
+                                        <div class="font-bold text-gray">Visible on Kiosk</div>
+                                        <p class="text-gray" style="font-size: 0.85rem; margin: 0.15rem 0 0 0;">Show this class on the kiosk&apos;s schedule. Hide it without deleting.</p>
+                                    </div>
+                                    <label class="closed-date-toggle">
+                                        <input type="checkbox" id="form-sched-visible" checked onchange="App.updateClassVisibilityLabel()">
+                                        <span class="closed-date-toggle-track"></span>
+                                        <span id="form-sched-visible-label" class="closed-date-toggle-label">Visible</span>
+                                    </label>
+                                </div>
+                            </div>
+                               
+                            <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--gray-light);">
+                            <label style="font-weight: bold;">1. Select Days for this slot</label>
+                            <div class="day-picker" id="draft-days">
+                                <label><input type="checkbox" value="Monday"> Mon</label>
+                                <label><input type="checkbox" value="Tuesday"> Tue</label>
+                                <label><input type="checkbox" value="Wednesday"> Wed</label>
+                                <label><input type="checkbox" value="Thursday"> Thu</label>
+                                <label><input type="checkbox" value="Friday"> Fri</label>
+                                <label><input type="checkbox" value="Saturday"> Sat</label>
+                                <label><input type="checkbox" value="Sunday"> Sun</label>
+                            </div>
+
+                            <div class="flex gap-2 mt-1">
+                                <div style="flex:1;">
+                                    <label style="font-weight: bold;">2. Start Time</label>
+                                    <input type="time" id="draft-start-time" class="mt-1">
+                                </div>
+                                <div style="flex:1;">
+                                    <label style="font-weight: bold;">3. End Time</label>
+                                    <input type="time" id="draft-end-time" class="mt-1">
+                                </div>
+                            </div>
+
+                            <button type="button" class="btn-outline mt-2" onclick="App.addDraftSlot()">+ Add Time Slot to Class</button>
+                            
+                            <div id="draft-slots-container" class="mt-2 flex-col gap-1 hidden">
+                                <h4>Draft Slots for this Class:</h4>
+                                <div id="draft-slots-list"></div>
+                            </div>
+
+                            <div class="flex gap-2 mt-2">
+                                <button type="button" class="btn-outline hidden" id="btn-cancel-schedule-edit" onclick="App.cancelScheduleEdit()">Cancel Edit</button>
+                                <button type="button" class="btn-primary w-full" onclick="App.saveClassSchedule()">Save Entire Class</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-content-schedule-master" class="tab-content-schedule hidden mt-1">
+                    <p class="text-gray mb-2">See the full weekly timetable at a glance.</p>
+                    <div class="calendar-wrapper">
+                        <div id="master-schedule-container"></div>
+                    </div>
+                    
+                    <p class="text-gray mt-2" style="text-align: center;">Click on any class in the "Add / Edit Class" tab to manage it.</p>
+                </div>
+                
+                <div id="tab-content-schedule-bin" class="tab-content-schedule hidden mt-1">
+                    <p class="text-gray mb-2">Recover class schedules that were accidentally deleted.</p>
+                    <div class="card">
+                        <h3>Deleted Schedules</h3>
+                        <div class="table-responsive mobile-cards">
+                            <table>
+                                <thead><tr><th>Class Name</th><th>Deleted Date</th><th>Action</th></tr></thead>
+                                <tbody id="schedule-bin-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings -->
+            <div id="pane-admin-settings" class="view-pane hidden">
+                <div class="flex justify-between align-center" style="flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h1>General Settings</h1>
+                        <p class="text-gray">Security, kiosk preferences, and data backups.</p>
+                    </div>
+                </div>
+                
+                <div class="card mt-2">
+                    <h3>Admin Portal Security</h3>
+                    <p class="text-gray mb-1">Change the password used to lock and unlock the admin portal.</p>
+                    <div class="flex gap-2 mt-1 mb-2">
+                        <div style="flex: 1;">
+                            <label class="text-gray">Current Admin Password</label>
+                            <input type="password" id="form-pwd-current" placeholder="Enter current password...">
+                        </div>
+                        <div style="flex: 1;">
+                            <label class="text-gray">New Admin Password</label>
+                            <input type="password" id="form-pwd-new" placeholder="Enter new password...">
+                        </div>
+                    </div>
+                    <button class="btn-warning btn-small" onclick="App.updateAdminPassword()">Change Password</button>
+
+                    <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--gray-light);">
+
+                    <h3>Kiosk Settings</h3>
+                    <p class="text-gray mb-1">Rename the gym portal that members see on the kiosk.</p>
+                    <label class="text-gray">Gym Portal Name</label>
+                    <div class="flex gap-2 mt-1 mb-2">
+                        <input type="text" id="form-portal-name" placeholder="Enter new portal name...">
+                        <button class="btn-primary" onclick="App.updatePortalName()">Update Name</button>
+                    </div>
+
+                    <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--gray-light);">
+
+                    <h3>Currency</h3>
+                    <p class="text-gray mb-1">Choose the currency symbol used across plans and payments.</p>
+                    <div class="flex gap-2 mt-1 mb-2">
+                        <select id="form-currency" style="max-width: 200px;">
+                            <option value="€">Euro (€)</option>
+                            <option value="$">USD ($)</option>
+                            <option value="£">GBP (£)</option>
+                        </select>
+                        <button class="btn-primary" onclick="App.updateCurrency()">Save Currency</button>
+                    </div>
+
+                    <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--gray-light);">
+                    
+                    <h3>Public Display Settings (Belts)</h3>
+                    <p class="text-gray mb-1">Select belts to <strong>HIDE</strong> their badge on the Kiosk's "Currently Inside" list.</p>
+                    <div class="day-picker mb-2">
+                        <label><input type="checkbox" class="setting-hide-belt" value="White"> Hide White</label>
+                        <label><input type="checkbox" class="setting-hide-belt" value="Blue"> Hide Blue</label>
+                        <label><input type="checkbox" class="setting-hide-belt" value="Purple"> Hide Purple</label>
+                        <label><input type="checkbox" class="setting-hide-belt" value="Brown"> Hide Brown</label>
+                        <label><input type="checkbox" class="setting-hide-belt" value="Black"> Hide Black</label>
+                    </div>
+                    <button class="btn-primary btn-small" onclick="App.saveBeltVisibility()">Save Belt Visibility</button>
+                </div>
+
+                <div class="card mt-2">
+                    <h3>Data Management</h3>
+                    <div class="flex gap-4 align-center mt-1" style="flex-wrap: wrap;">
+                        <div style="flex:1; min-width: 200px;">
+                            <strong>Export Backup</strong>
+                            <p class="text-gray mb-1 mt-1">Download your entire local database.</p>
+                            <button class="btn-primary" onclick="DB.exportData()">Download (JSON)</button>
+                        </div>
+                        <div style="width: 1px; background: var(--gray-light); height: 80px; display: none;"></div>
+                        <div style="flex:1; min-width: 200px;">
+                            <strong>Import Backup</strong>
+                            <p class="text-gray mb-1 mt-1">Restore from a previous backup file.</p>
+                            <input type="file" id="import-file" accept=".json" style="margin-bottom: 0.5rem; padding: 0.4rem;">
+                            <button class="btn-danger btn-small" onclick="DB.importData()">Restore Backup</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MEMBER VIEW -->
+    <div id="view-member" class="app-container hidden">
+        <div id="member-drawer-overlay" class="portal-drawer-overlay" onclick="App.toggleMemberMenu()"></div>
+        <div id="member-drawer" class="portal-drawer" aria-hidden="true">
+            <div class="portal-drawer-header">
+                <h2 id="member-drawer-title" class="portal-drawer-title">🥋 BJJ Kiosk Portal</h2>
+                <button class="portal-drawer-close-btn" onclick="App.toggleMemberMenu()" aria-label="Close menu">✕</button>
+            </div>
+            <div class="portal-drawer-section" id="member-drawer-section-menu">Menu</div>
+            <div class="portal-drawer-item" id="member-drawer-plans" onclick="App.toggleMemberMenu(); App.showPublicPlans();">View Plans</div>
+            <div class="portal-drawer-item" id="member-drawer-classes" onclick="App.toggleMemberMenu(); App.showPublicClasses();">Available Classes</div>
+            <div class="portal-drawer-section" id="member-drawer-section-lang">Language</div>
+            <div class="portal-drawer-item" id="member-drawer-lang" onclick="App.toggleLanguage()">🇬🇧 English</div>
+            <div class="portal-drawer-item portal-drawer-danger" id="member-drawer-logout" onclick="App.logout()">Logout</div>
+        </div>
+        <div class="main-content" style="max-width: 800px; margin: 0 auto; width: 100%;">
+            <div class="flex justify-between align-center mb-2 member-topbar">
+                <h1 id="member-dash-title" style="margin:0;">My Dashboard</h1>
+                <div class="member-header">
+                    <button id="member-menu-btn" class="btn-outline portal-menu-toggle" onclick="App.toggleMemberMenu()" aria-label="Open menu" title="Menu">☰</button>
+                </div>
+            </div>
+            
+            <div class="card mb-2" id="member-dash-info"></div>
+
+            <div class="dashboard-grid mb-2" id="member-dash-stats"></div>
+
+            <div class="card mb-2">
+                <h3 id="member-change-id-title">Change Member ID</h3>
+                <p id="member-change-id-desc" class="text-gray mb-1">Update your login ID code.</p>
+                <div class="flex gap-2 align-center">
+                    <input type="text" id="member-new-id" placeholder="New ID (max 8 digits)" maxlength="8" pattern="\d{1,8}" style="max-width: 250px;">
+                    <button id="member-change-id-save" class="btn-primary" onclick="App.changeMemberId()">Save ID</button>
+                </div>
+            </div>
+
+            <div class="card mb-2" style="border-left: 4px solid var(--primary);">
+                <div class="flex justify-between align-center" style="gap: 1rem;">
+                    <div>
+                        <h3 id="member-hide-lb-title">Hide From Leaderboard</h3>
+                        <p id="member-hide-lb-desc" class="text-gray mb-1">Hide your name and rank from the Top Trainings leaderboard.</p>
+                    </div>
+                    <label class="closed-date-toggle">
+                        <input type="checkbox" id="member-hide-lb-toggle" onchange="App.toggleHideFromLeaderboard(this.checked)">
+                        <span class="closed-date-toggle-track"></span>
+                        <span id="member-hide-lb-label" class="closed-date-toggle-label">Visible</span>
+                    </label>
+                </div>
+            </div>
+            
+            <details class="card mb-2" style="background: var(--white); padding: 1rem; border-radius: var(--border-radius); border: 1px solid var(--gray-light);">
+                <summary id="member-history-summary" style="font-weight:bold; cursor:pointer; font-size: 1.25rem;">My Personal Calendar & Check-in History</summary>
+                <div id="member-personal-history" class="mt-2" style="max-height: 300px; overflow-y:auto;"></div>
+            </details>
+
+            <div class="card" style="border-left: 4px solid var(--danger);">
+                <h3 id="member-unpaid-title" style="color: var(--danger);">Unpaid Check-ins / Expired Trainings</h3>
+                <p id="member-unpaid-desc" class="text-gray mb-1">The following past visits were recorded while your account was expired or frozen.</p>
+                <div class="table-responsive mobile-cards">
+                    <table>
+                        <thead><tr><th id="member-unpaid-date-header">Date</th><th id="member-unpaid-entry-header">Entry Time</th><th id="member-unpaid-duration-header">Duration</th></tr></thead>
+                        <tbody id="member-unpaid-visits-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MOBILE SELF CHECK-IN VIEW -->
+    <div id="view-mobile-checkin" class="app-container hidden">
+        <div class="main-content" style="max-width: 600px; margin: 0 auto; width: 100%;">
+            <div id="mobile-checkin-notice" class="kiosk-msg warning hidden"></div>
+            <div class="card kiosk-input-card" style="text-align: center; padding: 2rem 1.5rem;">
+                <h1 id="mobile-checkin-title" style="font-size: 1.5rem; margin: 0 0 0.25rem 0;">Member Check-In</h1>
+                <p id="mobile-checkin-subtitle" class="text-gray" style="margin: 0 0 1.25rem 0;">Scan the QR at the gym to check in.</p>
+
+                <div id="mobile-checkin-identify">
+                    <p class="text-gray">Enter your Member ID</p>
+                    <input type="text" id="mobile-checkin-id" class="search-bar" placeholder="Member ID" maxlength="8" pattern="\d*" inputmode="numeric" autocomplete="off" style="text-align: center; font-size: 1.5rem; letter-spacing: 3px;" onkeyup="if(event.key === 'Enter') App.mobileCheckinSubmit()">
+                    <button class="btn-primary btn-large w-full mt-2" onclick="App.mobileCheckinSubmit()">Check In</button>
+                    <div id="mobile-checkin-msg" class="kiosk-msg hidden"></div>
+                </div>
+
+                <div id="mobile-checkin-greeting" class="hidden">
+                    <p id="mobile-checkin-greeting-name" class="text-gray" style="font-size: 1.1rem; margin: 0 0 1rem 0;"></p>
+                    <button class="btn-success btn-large w-full" onclick="App.mobileCheckinGo()">Check In</button>
+                    <button class="btn-outline w-full mt-2" onclick="App.mobileCheckinSwitch()">Not you? Switch member</button>
+                </div>
+
+                <div id="mobile-checkin-success" class="hidden">
+                    <div style="font-size: 2.5rem;">✅</div>
+                    <h2 style="margin: 0.5rem 0 0 0;">You're checked in!</h2>
+                    <p id="mobile-checkin-success-text" class="text-gray">Enjoy your training.</p>
+                    <button class="btn-outline w-full mt-2" onclick="App.mobileCheckinAgain()">Check In Again</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MEMBER EDITOR MODAL -->
+    <div id="modal-member" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="flex justify-between align-center mb-1">
+                <h2 id="modal-title" style="margin:0;">Add/Edit Member</h2>
+                <button class="btn-outline" style="padding: 0.25rem 0.75rem;" onclick="App.closeModal('modal-member')">✕</button>
+            </div>
+            <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
+            
+            <div class="dashboard-grid mb-2" id="admin-member-stats" style="gap: 1rem; margin-top: -0.5rem;"></div>
+
+            <form id="member-form" class="flex-col gap-1">
+                <input type="hidden" id="form-original-id">
+                
+                <div class="flex gap-2">
+                    <div style="flex: 1;">
+                        <label class="text-gray font-bold">Member ID (Up to 8 Digits) *</label>
+                        <input type="text" id="form-member-id" class="mt-1" required pattern="\d{1,8}" maxlength="8" placeholder="󠁯•󠁏󠁏󠁯•󠁏󠁏󠁯•󠁏󠁏󠁯•󠁏󠁏">
+                    </div>
+                    <div style="flex: 1;">
+                        <label class="text-gray font-bold">Account Status *</label>
+                        <select id="form-account-status" class="mt-1">
+                            <option value="Active">Active (Normal)</option>
+                            <option value="Inactive">Inactive (No Membership)</option>
+                            <option value="Frozen">Frozen / Suspended</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="flex gap-2 mt-1">
+                    <div style="flex: 1;">
+                        <label class="text-gray font-bold">First Name *</label>
+                        <input type="text" id="form-first-name" class="mt-1" required>
+                    </div>
+                    <div style="flex: 1;">
+                        <label class="text-gray font-bold">Last Name *</label>
+                        <input type="text" id="form-last-name" class="mt-1" required>
+                    </div>
+                </div>
+                
+                <div class="flex gap-2 mt-1">
+                    <div style="flex: 1;">
+                        <label class="text-gray font-bold">Date of Birth</label>
+                        <input type="date" id="form-dob" class="mt-1">
+                    </div>
+                    <div style="flex: 1;">
+                        <label class="text-gray font-bold">Belt</label>
+                        <select id="form-belt" class="mt-1" onchange="App.updateBeltColor(this)">
+                            <option value="White" style="background: #ffffff; color: #1e293b;">White Belt</option>
+                            <option value="Blue" style="background: #1d4ed8; color: #ffffff;">Blue Belt</option>
+                            <option value="Purple" style="background: #6b21a8; color: #ffffff;">Purple Belt</option>
+                            <option value="Brown" style="background: #78350f; color: #ffffff;">Brown Belt</option>
+                            <option value="Black" style="background: #0f172a; color: #ffffff;">Black Belt</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 mt-1">
+                    <div style="flex: 1;">
+                        <label class="text-gray font-bold">Gender</label>
+                        <select id="form-gender" class="mt-1">
+                            <option value="Unspecified">Unspecified</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 mt-1">
+                    <div style="flex: 1;">
+                        <label class="text-gray font-bold">Phone Number</label>
+                        <input type="tel" id="form-phone" class="mt-1">
+                    </div>
+                    <div style="flex: 1;">
+                        <label class="text-gray font-bold">Email (Optional)</label>
+                        <input type="email" id="form-email" class="mt-1">
+                    </div>
+                </div>
+
+                <label class="text-gray font-bold mt-1">Admin Notes</label>
+                <textarea id="form-notes" class="mt-1" placeholder="Internal staff notes, medical warnings..."></textarea>
+
+                <div class="plan-highlight mt-2" style="border: 1px solid var(--primary);">
+                    <h3 style="margin-top:0;">Membership Plan & Payments</h3>
+                    <label style="font-weight: 600; color: var(--dark);">Apply Membership Plan & Renew</label>
+                    <select id="form-plan-select" onchange="App.applyPlan()" class="mt-1">
+                        <option value="">-- Select a Plan --</option>
+                    </select>
+                    
+                    <div class="flex gap-2 mt-2">
+                        <div style="flex: 1;">
+                            <label class="text-gray">Starting Date</label>
+                            <input type="date" id="form-start-date" class="mt-1" onchange="App.applyPlan()" required>
+                        </div>
+                        <div style="flex: 1;">
+                            <label class="text-gray" style="font-weight:bold; color:var(--dark);">Expiration Date</label>
+                            <input type="date" id="form-expiration" class="mt-1">
+                        </div>
+                        <div style="flex: 1;">
+                            <label class="text-gray" id="label-payment-applied">Payment Applied</label>
+                            <input type="number" id="form-last-payment" class="mt-1" step="0.01" value="0.00" readonly style="background: #e2e8f0; color: var(--gray);">
+                        </div>
+                    </div>
+
+                    <!-- Add sessions UI tracking for plan -->
+                    <div class="flex gap-2 mt-2" id="member-sessions-wrapper" style="display:none;">
+                        <div style="flex: 1;">
+                            <label class="text-gray">Remaining Sessions</label>
+                            <input type="number" id="form-sessions-left" class="mt-1" min="0">
+                        </div>
+                    </div>
+
+                    <div id="member-unpaid-warning"></div>
+                    <div id="member-unpaid-analytic" style="margin-top:0.5rem; font-size:0.95rem; color:var(--dark);"></div>
+                    <button type="button" class="btn-warning btn-small hidden" id="btn-clear-member-debt" onclick="App.clearMemberDebt()" style="margin-top: 0.75rem; align-self: flex-start;">Clear Unpaid Debt</button>
+ 
+                    <div id="admin-member-payments-wrapper" class="mt-4" style="border-top: 1px solid var(--gray-light); padding-top: 1rem;">
+                        <div class="flex justify-between align-center mb-1">
+                            <h4 style="font-size: 1rem; margin:0;">Payment History</h4>
+                            <button type="button" class="btn-primary btn-small" onclick="App.openPaymentModal(document.getElementById('form-member-id').value)">+ Add Payment</button>
+                        </div>
+                        <div class="table-responsive mobile-cards">
+                            <table>
+                                <thead><tr><th>Date</th><th>Amount</th><th>Note</th><th>Action</th></tr></thead>
+                                <tbody id="member-payments-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <details class="mt-2" id="admin-member-calendar-wrapper" style="background: var(--light); padding: 1rem; border-radius: var(--border-radius); border: 1px solid var(--gray-light);">
+                    <summary style="font-weight:bold; cursor:pointer;">View Training/Check-in History</summary>
+                    <div id="admin-member-personal-history" class="mt-1" style="max-height: 200px; overflow-y:auto;"></div>
+                </details>
+
+                <div class="flex gap-2 mt-4 align-center" style="border-top: 1px solid var(--gray-light); padding-top: 1.5rem;">
+                    <button type="button" class="btn-danger hidden" id="btn-delete-member" onclick="App.deleteMemberFromModal()">Delete</button>
+                    <div style="flex: 1;"></div> 
+                    <button type="button" class="btn-outline" onclick="App.closeModal('modal-member')">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Member</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- PAYMENT MODAL (WITH PLAN PICKER) -->
+    <div id="modal-payment" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="flex justify-between align-center mb-1">
+                <h2 style="margin:0;">Add / Edit Payment</h2>
+                <button class="btn-outline" style="padding: 0.25rem 0.75rem;" onclick="App.closeModal('modal-payment')">✕</button>
+            </div>
+            <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
+            
+            <form id="payment-form" class="flex-col gap-1 mt-2">
+                <input type="hidden" id="form-pay-id">
+                <label class="text-gray font-bold">Member *</label>
+                <select id="form-pay-member" required onchange="App.onPaymentMemberOrPlanChange()"></select>
+
+                <!-- REQUIREMENT 1: VISIBLE & CHOOSABLE MEMBERSHIP PLAN IN ADD PAYMENT -->
+                <label class="text-gray font-bold mt-1">Select Membership Plan (Optional)</label>
+                <select id="form-pay-plan" class="mt-1" onchange="App.onPaymentPlanChange()">
+                    <option value="">-- Custom Payment / No Plan --</option>
+                </select>
+                <div id="payment-unpaid-info" class="hidden" style="margin-top: 1rem; padding: 1rem; border-left: 4px solid var(--warning); background: #fff7ed; border-radius: var(--border-radius);">
+                    <strong style="display:block; margin-bottom:0.5rem;">Unpaid Trainings for selected member</strong>
+                    <div id="payment-unpaid-count" class="text-gray" style="font-size: 0.95rem;"></div>
+                    <div id="payment-unpaid-list" class="text-gray" style="margin-top: 0.75rem; font-size: 0.95rem;"></div>
+                </div>
+                <div class="flex gap-2 mt-1" style="flex-wrap: wrap;">
+                    <div style="flex:1; min-width: 170px;">
+                        <label class="text-gray font-bold">Payment Date *</label>
+                        <input type="date" id="form-pay-date" required onchange="App.onPaymentMemberOrPlanChange()">
+                    </div>
+                    <div style="flex:1; min-width: 170px;">
+                        <label class="text-gray font-bold">Amount *</label>
+                        <input type="number" id="form-pay-amount" step="0.01" required placeholder="0.00">
+                    </div>
+                </div>
+                
+                <label class="text-gray font-bold mt-1">Update Expiration To (Optional, modifies member status)</label>
+                <input type="date" id="form-pay-exp">
+                
+                <label class="text-gray font-bold mt-1">Note</label>
+                <input type="text" id="form-pay-note" placeholder="E.g., 6 Months Plan Cash">
+                
+                <div class="flex gap-2 mt-4" style="border-top: 1px solid var(--gray-light); padding-top: 1.5rem;">
+                    <button type="button" class="btn-danger hidden" id="btn-delete-payment" onclick="App.deletePayment()">Delete</button>
+                    <div style="flex:1"></div>
+                    <button type="button" class="btn-outline" onclick="App.closeModal('modal-payment')">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CLASS DETAILS MODAL -->
+    <div id="modal-class-details" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="flex justify-between align-center mb-1">
+                <h2 id="class-details-title" style="margin:0;">Class Details</h2>
+                <button class="btn-outline" style="padding: 0.25rem 0.75rem;" onclick="App.closeModal('modal-class-details')">✕</button>
+            </div>
+            <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
+            <div id="class-details-content"></div>
+            <button onclick="App.closeModal('modal-class-details')" class="btn-primary w-full mt-4 btn-large">Close</button>
+        </div>
+    </div>
+
+    <div id="modal-checkin-classes" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 560px;">
+            <div class="flex justify-between align-center mb-1">
+                <h2 style="margin:0;">Select Classes</h2>
+            <button class="btn-outline" style="padding: 0.25rem 0.75rem;" onclick="App.cancelCheckinSelection()">✕</button>
+            </div>
+            <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
+            <div id="checkin-classes-content" style="max-height: 320px; overflow-y: auto;"></div>
+            <div id="checkin-classes-open-menu" class="checkin-open-menu hidden"></div>
+            <p id="checkin-classes-note" class="text-gray mt-2" style="font-size: 0.95rem;">Select one or more classes you are checking in for.</p>
+            <div class="flex gap-2 mt-4" style="flex-wrap: wrap;">
+                <button class="btn-outline" onclick="App.cancelCheckinSelection()">Cancel</button>
+                <button class="btn-primary" onclick="App.confirmCheckin()">Confirm Check-In</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADMIN CHECK-IN CLASS SELECTION MODAL -->
+    <div id="modal-admin-checkin-classes" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 560px;">
+            <div class="flex justify-between align-center mb-1">
+                <h2 style="margin:0;">Select Class</h2>
+                <button class="btn-outline" style="padding: 0.25rem 0.75rem;" onclick="App.cancelAdminCheckinSelection()">✕</button>
+            </div>
+            <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
+            <div id="admin-checkin-member-summary" class="mb-2" style="background: var(--light); padding: 0.75rem 1rem; border-radius: var(--border-radius); border: 1px solid var(--gray-light); font-size: 0.95rem;"></div>
+            <div id="admin-checkin-classes-content" style="max-height: 320px; overflow-y: auto;"></div>
+            <div id="admin-checkin-classes-open-menu" class="checkin-open-menu hidden"></div>
+            <p id="admin-checkin-classes-note" class="text-gray mt-2" style="font-size: 0.95rem;">Select the class(es) this member is attending, or leave empty for an open-gym check-in.</p>
+            <div class="flex gap-2 mt-4" style="border-top: 1px solid var(--gray-light); padding-top: 1.5rem;">
+                <button class="btn-outline" onclick="App.cancelAdminCheckinSelection()">Cancel</button>
+                <div style="flex:1;"></div>
+                <button class="btn-primary" onclick="App.confirmAdminCheckinSelection()">Confirm Check-In</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOM COLOR PICKER MODAL -->
+    <div id="modal-custom-color" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 420px;">
+            <div class="flex justify-between align-center mb-1">
+                <h2 style="margin:0;">Choose Custom Color</h2>
+                <button class="btn-outline" style="padding: 0.25rem 0.75rem;" onclick="App.closeModal('modal-custom-color')">✕</button>
+            </div>
+            <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1rem;">
+            <div style="display:flex; gap:1rem; align-items:center;">
+                <input type="color" id="custom-color-picker" value="#2563eb" style="width:80px; height:48px;">
+                <div style="flex:1;">
+                    <label class="text-gray">Hex or CSS color</label>
+                    <input type="text" id="custom-color-hex" placeholder="#2563eb" style="width:100%; margin-top:0.25rem;">
+                </div>
+            </div>
+            <div class="flex gap-2 mt-3">
+                <div style="flex:1;"></div>
+                <button class="btn-outline" onclick="App.closeModal('modal-custom-color')">Cancel</button>
+                <button class="btn-primary" onclick="App.saveCustomColor()">Save Color</button>
+            </div>
+        </div>
+    </div>
+    <!-- EXPORT MEMBERS MODAL -->
+    <div id="modal-export" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="flex justify-between align-center mb-1">
+                <h2 style="margin: 0;">📥 Export Members</h2>
+                <button class="btn-outline" style="padding: 0.25rem 0.75rem;" onclick="App.closeModal('modal-export')">✕</button>
+            </div>
+            <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
+            <p class="text-gray mb-2">Select the fields to include in the export file.</p>
+            <div class="flex justify-between align-center mb-1">
+                <span class="text-gray" style="font-weight: 600; font-size: 0.85rem;">FIELDS</span>
+                <div class="flex gap-1">
+                    <button class="btn-outline btn-small" onclick="App.toggleAllExportFields(true)">Select All</button>
+                    <button class="btn-outline btn-small" onclick="App.toggleAllExportFields(false)">Deselect All</button>
+                </div>
+            </div>
+            <div id="export-fields-container" class="flex-col gap-1" style="margin-bottom: 1.5rem;"></div>
+            <button class="btn-primary w-full" onclick="App.exportMembersToExcel()" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 1.05rem;">
+                📥 Download as Excel (.csv)
+            </button>
+        </div>
+    </div>
+
+    <!-- CORE JAVASCRIPT -->
+
+    <!-- Firebase SDKs (compat) v10.8.0 -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="js/app-core.js"></script>
+    <script src="js/app-ui.js"></script>
+    <script src="js/app-kiosk.js"></script>
+    <script src="js/app-member-portal.js"></script>
+    <script src="js/app-checkin-admin.js"></script>
+    <script src="js/app-mobile-checkin.js"></script>
+    <script src="js/app-members.js"></script>
+    <script src="js/app-plans.js"></script>
+    <script src="js/app-schedule.js"></script>
+    <script src="js/app-payments.js"></script>
+    <script src="js/app-admin.js"></script>
+    <script src="js/app-i18n.js"></script>
+
+
+</body>
+</html>
