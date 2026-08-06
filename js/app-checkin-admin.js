@@ -337,9 +337,13 @@ Object.assign(App, {
 
                 // If the member is already inside an active visit, keep that visit open and attach the
                 // new class(es) to it, so back-to-back classes all display next to the member's name.
-                // Backdated sessions always create their own visit so they never merge with a live visit.
+                // Backdated sessions always create their own visit so they never merge with a live visit,
+                // and neither does a check-in for a class that has already ended — such a check-in is a
+                // historical/attendance record, so it gets its own visit that is finalized (checked out)
+                // immediately instead of leaving the member "inside".
+                const alreadyEnded = new Date(expected) <= now;
                 let visitId;
-                const activeVisit = !isBackdated
+                const activeVisit = !isBackdated && !alreadyEnded
                     ? visits.find(v => v.memberId === member.id && !v.exitTime && v.expectedExitTime && new Date(v.expectedExitTime) > now)
                     : null;
                 if (activeVisit) {
@@ -350,13 +354,14 @@ Object.assign(App, {
                     activeVisit.classIds = [...new Set([...(activeVisit.classIds || []), ...classIds])];
                     activeVisit.isUnpaid = !!(activeVisit.isUnpaid || isUnpaidVisit);
                 } else {
-                    // Close any legacy open visit at this entry time to avoid duplicates (live check-ins only)
-                    if (!isBackdated) {
+                    // Close any legacy open visit at this entry time to avoid duplicates (live check-ins only).
+                    // Skip for ended-class check-ins so an unrelated live visit (member already inside) is left open.
+                    if (!isBackdated && !alreadyEnded) {
                         const prevOpen = visits.find(v => v.memberId === member.id && !v.exitTime);
                         if (prevOpen) prevOpen.exitTime = entryIso;
                     }
                     visitId = 'V-' + Date.now();
-                    visits.push({ id: visitId, memberId: member.id, entryTime: entryIso, expectedExitTime: expected, exitTime: null, isUnpaid: isUnpaidVisit, classIds });
+                    visits.push({ id: visitId, memberId: member.id, entryTime: entryIso, expectedExitTime: expected, exitTime: alreadyEnded ? expected : null, isUnpaid: isUnpaidVisit, classIds });
                 }
                 DB.saveVisits(visits);
 

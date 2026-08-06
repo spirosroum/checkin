@@ -347,8 +347,12 @@ Object.assign(App, {
 
                 // If the member is already inside an active visit, keep that visit open and attach the
                 // new class(es) to it, so back-to-back classes all display next to the member's name.
+                // A check-in for a class that has already ended is a historical/attendance record, so it
+                // gets its own visit that is finalized (checked out) immediately instead of leaving the
+                // member "inside".
+                const alreadyEnded = new Date(expected) <= now;
                 let visitId;
-                const activeVisit = visits.find(v => v.memberId === member.id && !v.exitTime && v.expectedExitTime && new Date(v.expectedExitTime) > now);
+                const activeVisit = !alreadyEnded && visits.find(v => v.memberId === member.id && !v.exitTime && v.expectedExitTime && new Date(v.expectedExitTime) > now);
                 if (activeVisit) {
                     visitId = activeVisit.id;
                     if (new Date(expected).getTime() > new Date(activeVisit.expectedExitTime).getTime()) {
@@ -357,10 +361,14 @@ Object.assign(App, {
                     activeVisit.classIds = [...new Set([...(activeVisit.classIds || []), ...classIds])];
                     activeVisit.isUnpaid = !!(activeVisit.isUnpaid || isUnpaidVisit);
                 } else {
-                    const prevOpen = visits.find(v => v.memberId === member.id && !v.exitTime);
-                    if (prevOpen) prevOpen.exitTime = entryIso;
+                    // Close any legacy open visit to avoid duplicates (live check-ins only).
+                    // Skip for ended-class check-ins so an unrelated live visit (member already inside) is left open.
+                    if (!alreadyEnded) {
+                        const prevOpen = visits.find(v => v.memberId === member.id && !v.exitTime);
+                        if (prevOpen) prevOpen.exitTime = entryIso;
+                    }
                     visitId = 'V-' + Date.now();
-                    visits.push({ id: visitId, memberId: member.id, entryTime: entryIso, expectedExitTime: expected, exitTime: null, isUnpaid: isUnpaidVisit, classIds });
+                    visits.push({ id: visitId, memberId: member.id, entryTime: entryIso, expectedExitTime: expected, exitTime: alreadyEnded ? expected : null, isUnpaid: isUnpaidVisit, classIds });
                 }
                 DB.saveVisits(visits);
 
@@ -581,16 +589,17 @@ Object.assign(App, {
                                     <th class="kiosk-lb-rank-col">${Utils.escapeHTML(map.leaderboardRankColumn || 'Rank')}</th>
                                     <th class="kiosk-lb-member-col">${Utils.escapeHTML(map.leaderboardMemberColumn || 'Member')}</th>
                                     <th>${Utils.escapeHTML(map.leaderboardBeltColumn || 'Belt')}</th>
-                                    <th class="kiosk-lb-count-col">${Utils.escapeHTML(map.leaderboardSessionsColumn || 'Trainings')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${top.map(entry => `
                                     <tr class="kiosk-lb-row${entry.rank <= 3 ? ' kiosk-lb-row--podium' : ''}">
                                         <td class="kiosk-lb-rank">${App.leaderboardRankCell(entry.rank)}</td>
-                                        <td class="kiosk-lb-member"><strong class="kiosk-lb-name">${Utils.escapeHTML(entry.member.firstName)} ${Utils.escapeHTML(entry.member.lastName)}</strong></td>
+                                        <td class="kiosk-lb-member">
+                                            <strong class="kiosk-lb-name">${Utils.escapeHTML(entry.member.firstName)} ${Utils.escapeHTML(entry.member.lastName)}</strong>
+                                            <span class="kiosk-lb-count-badge">${entry.count} ${Utils.escapeHTML(map.leaderboardSessionsColumn || 'Trainings')}</span>
+                                        </td>
                                         <td>${Utils.getBeltBadge(entry.member.belt)}</td>
-                                        <td class="kiosk-lb-count"><span class="kiosk-lb-count-badge">${entry.count}</span></td>
                                     </tr>
                                 `).join('')}
                             </tbody>

@@ -203,7 +203,7 @@
 
         /* Kiosk "Most Trainings" leaderboard */
         .kiosk-leaderboard-wrap { -webkit-overflow-scrolling: touch; }
-        .kiosk-leaderboard-table { min-width: 540px; margin-bottom: 0; }
+        .kiosk-leaderboard-table { min-width: 440px; margin-bottom: 0; }
         .kiosk-leaderboard-table th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray); padding: 0.65rem 0.9rem; }
         .kiosk-leaderboard-table td { padding: 0.7rem 0.9rem; white-space: nowrap; }
         .kiosk-lb-rank { text-align: left; }
@@ -211,10 +211,9 @@
         .kiosk-lb-rank-num.kiosk-lb-rank--gold { background: #fef3c7; color: #92400e; }
         .kiosk-lb-rank-num.kiosk-lb-rank--silver { background: #e2e8f0; color: #334155; }
         .kiosk-lb-rank-num.kiosk-lb-rank--bronze { background: #fed7aa; color: #7c2d12; }
-        .kiosk-lb-member { white-space: normal; }
+        .kiosk-lb-member { display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; white-space: normal; }
         .kiosk-lb-name { font-size: 1rem; color: var(--dark); overflow-wrap: anywhere; word-break: break-word; }
-        .kiosk-lb-count { text-align: right; }
-        .kiosk-lb-count-badge { display: inline-block; min-width: 38px; text-align: center; padding: 0.3rem 0.75rem; border-radius: 999px; background: #eef2ff; color: #1e3a8a; font-weight: 800; font-size: 0.95rem; }
+        .kiosk-lb-count-badge { display: inline-block; min-width: 38px; text-align: center; padding: 0.25rem 0.7rem; border-radius: 999px; background: #eef2ff; color: #1e3a8a; font-weight: 800; font-size: 0.85rem; line-height: 1.2; }
         .kiosk-lb-row--podium td { background: #fffbeb; }
         .kiosk-lb-row--podium:hover td { background: #fef9c3; }
 
