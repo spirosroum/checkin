@@ -145,6 +145,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             arrayMirrors: {},     // array-doc collection -> JSON string of items
             lastDocs: {},         // per-record collection -> last snapshot records
             ready: {},            // collection -> first snapshot received
+            snapSeen: new Set(),  // collection -> snapshot actually received (even if empty)
             settingsReady: false,
             settingsMirror: '',
             dirty: new Set(),     // collections with local changes not yet flushed
@@ -433,7 +434,11 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
         function markDirtyCollections() {
             Object.keys(CLOUD_COLLECTIONS).forEach(col => {
-                if (!FSEngine.ready[col]) { FSEngine.dirty.add(col); return; }
+                // Not loaded yet: there is nothing to diff against, and boot-time
+                // no-op writes (e.g. cleanBin on a fresh client) must not mark the
+                // collection dirty — that would block its first snapshot from ever
+                // being applied (schedules/closedDates never loading, etc.).
+                if (!FSEngine.ready[col]) return;
                 const cfg = CLOUD_COLLECTIONS[col];
                 const arr = STATE[cfg.state] || [];
                 const mirror = FSEngine.mirrors[col] || new Map();
@@ -447,7 +452,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 for (const k of mirror.keys()) if (!seen.has(k)) { FSEngine.dirty.add(col); return; }
             });
             Object.keys(ARRAY_DOCS).forEach(col => {
-                if (!FSEngine.ready[col]) { FSEngine.dirty.add(col); return; }
+                if (!FSEngine.ready[col]) return;
                 if (JSON.stringify(STATE[ARRAY_DOCS[col].state] || []) !== FSEngine.arrayMirrors[col]) FSEngine.dirty.add(col);
             });
             if (FSEngine.settingsReady && JSON.stringify(settingsPayload()) !== FSEngine.settingsMirror) FSEngine.dirty.add('settings');
@@ -488,6 +493,11 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         }
 
         function applyCollectionSnapshotData(col) {
+            // No snapshot received for this collection yet — lastDocs is empty
+            // simply because nothing has loaded, not because the cloud is empty.
+            // Applying (and marking the collection "applied") here would let a
+            // fresh client's flush delete the entire cloud collection.
+            if (!FSEngine.snapSeen.has(col)) return;
             const cfg = CLOUD_COLLECTIONS[col];
             const docs = FSEngine.lastDocs[col] || [];
             const cloudArr = [];
@@ -588,6 +598,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 FSEngine.mirrors[col] = mirror;
                 FSEngine.lastDocs[col] = docs;
                 FSEngine.ready[col] = true;
+                FSEngine.snapSeen.add(col);
                 if (FSEngine.migrationResolved) { applyCollectionSnapshotData(col); fallbackToLocal(); renderAfterCloudSync(); }
                 if (FSEngine.migrationResolved && col === 'members') applyRenameLedger();
                 if (FSEngine.dirty.has(col)) FSEngine.scheduleFlush();
@@ -599,6 +610,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const items = (doc.exists && doc.data() && Array.isArray(doc.data().items)) ? doc.data().items : [];
                 FSEngine.arrayMirrors[col] = JSON.stringify(items);
                 FSEngine.ready[col] = true;
+                FSEngine.snapSeen.add(col);
                 if (FSEngine.migrationResolved && !FSEngine.dirty.has(col)) {
                     STATE[ARRAY_DOCS[col].state] = items;
                     FSEngine.applied.add(col);
@@ -614,7 +626,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             FSEngine.migrationResolved = true;
             Object.keys(CLOUD_COLLECTIONS).forEach(col => applyCollectionSnapshotData(col));
             Object.keys(ARRAY_DOCS).forEach(col => {
-                if (!FSEngine.dirty.has(col)) { STATE[ARRAY_DOCS[col].state] = FSEngine.arrayMirrors[col] ? JSON.parse(FSEngine.arrayMirrors[col]) : []; FSEngine.applied.add(col); }
+                if (!FSEngine.dirty.has(col) && FSEngine.arrayMirrors[col] !== undefined) { STATE[ARRAY_DOCS[col].state] = JSON.parse(FSEngine.arrayMirrors[col]); FSEngine.applied.add(col); }
             });
             fallbackToLocal();
             renderAfterCloudSync();
