@@ -650,28 +650,6 @@ Object.assign(App, {
                         prevExpiration: prevExp
                     });
                     DB.savePayments(payments);
-
-                    // Clear unpaid flags for previous unpaid visits ONLY if they fall within the new validity window
-                    let visits = DB.getVisits();
-                    let changed = false;
-                    visits.forEach(v => { 
-                        if (v.memberId === id && v.isUnpaid) { 
-                            let coversVisit = true;
-                            if (appliedStartDate) {
-                                const visitDateObj = new Date(v.entryTime);
-                                const visitYMD = visitDateObj.getFullYear() + '-' + String(visitDateObj.getMonth()+1).padStart(2,'0') + '-' + String(visitDateObj.getDate()).padStart(2,'0');
-                                
-                                if (visitYMD < appliedStartDate) coversVisit = false;
-                                if (appliedExp && visitYMD > appliedExp) coversVisit = false;
-                            }
-                            
-                            if (coversVisit) {
-                                v.isUnpaid = false; 
-                                changed = true; 
-                            }
-                        } 
-                    });
-                    if (changed) DB.saveVisits(visits);
                 }
 
                 // Update visits if ID changed
@@ -682,6 +660,25 @@ Object.assign(App, {
                 }
 
                 DB.saveMembers(members);
+
+                // Let the reconciliation engine settle coverage for the applied plan:
+                // session bundles consume outstanding unpaid check-ins via their quota
+                // (a 1-session bundle after 2 unpaid check-ins pays for one visit and
+                // leaves 0 sessions), and time-based plans cover visits within their
+                // validity window. Keeps the member form consistent with the payment path.
+                if (paymentAmt > 0 && planId) {
+                    App.reconcileMemberPaymentVisitStatus(id);
+                }
+
+                // A member must not be Active without usable coverage once the applied
+                // plan has been consumed by outstanding debt.
+                const savedMember = members.find(x => x.id === id);
+                if (savedMember && savedMember.accountStatus === 'Active'
+                    && !(savedMember.sessionsTotal && (parseInt(savedMember.sessionsLeft, 10) || 0) > 0)
+                    && !(savedMember.expirationDate && Utils.getDaysRemaining(savedMember.expirationDate) >= 0)) {
+                    savedMember.accountStatus = 'Inactive';
+                    DB.saveMembers(members);
+                }
 
                 // Debug: log saved member status to console to verify Inactive enforcement
                 try {

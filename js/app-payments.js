@@ -465,6 +465,14 @@ Object.assign(App, {
                     clearedVisitIds = Array.from(new Set(originalPayment.clearedVisitIds));
                 } else if (!planId) {
                     clearedVisitIds = DB.getVisits().filter(v => v.memberId === memberId && v.isUnpaid).map(v => v.id);
+                } else if (sessionsGranted != null && sessionsGranted > 0) {
+                    // Session bundles: do NOT explicitly clear unpaid visits here. The
+                    // reconciliation engine covers them chronologically with the session quota,
+                    // so the purchased sessions are actually CONSUMED by the outstanding debt
+                    // (e.g. a 1-session bundle after 2 unpaid check-ins pays for one visit and
+                    // leaves 0 sessions) instead of clearing the visits for free and leaving
+                    // the member with a full balance + Active status.
+                    clearedVisitIds = [];
                 } else {
                     const formPayStart = document.getElementById('form-pay-start').value || document.getElementById('form-pay-date').value;
                     const formPayExp = document.getElementById('form-pay-exp').value;
@@ -552,22 +560,26 @@ Object.assign(App, {
                     }
                 }
 
-                // Auto-activate member on positive payment amount — but only when the payment
-                // actually grants coverage (session quota or an expiration window). A generic
-                // custom payment with no plan must not silently activate a member into free
-                // unlimited check-ins.
-                if (m && m.accountStatus !== 'Active' && newPay.amount && parseFloat(newPay.amount) > 0
-                    && ((sessionsGranted != null && sessionsGranted > 0) || !!newExp)) {
-                    m.accountStatus = 'Active';
-                    DB.saveMembers(members);
-                    App.addNotification('Member Activated', `${m.firstName} ${m.lastName} was activated by recorded payment.`, 'success', m.id);
-                }
-
                 // Reconcile visit payment status after saving this payment
                 if (originalPayment && originalPayment.memberId && originalPayment.memberId !== memberId) {
                     App.reconcileMemberPaymentVisitStatus(originalPayment.memberId);
                 }
                 App.reconcileMemberPaymentVisitStatus(memberId);
+
+                // Auto-activate member on positive payment amount — only when the member has
+                // USABLE coverage left AFTER reconciliation. If the purchased sessions were
+                // immediately consumed by outstanding unpaid check-ins (e.g. a 1-session bundle
+                // after 2 unpaid visits), the member ends with 0 sessions and must NOT be
+                // activated. A generic custom payment with no plan must not activate either.
+                if (m && m.accountStatus !== 'Active' && newPay.amount && parseFloat(newPay.amount) > 0) {
+                    const hasUsableCoverage = (m.sessionsTotal && (parseInt(m.sessionsLeft, 10) || 0) > 0)
+                        || (m.expirationDate && Utils.getDaysRemaining(m.expirationDate) >= 0);
+                    if (hasUsableCoverage) {
+                        m.accountStatus = 'Active';
+                        DB.saveMembers(members);
+                        App.addNotification('Member Activated', `${m.firstName} ${m.lastName} was activated by recorded payment.`, 'success', m.id);
+                    }
+                }
 
                 App.closeModal('modal-payment');
                 App.syncPaymentViews(memberId);
