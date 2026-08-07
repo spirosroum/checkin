@@ -189,6 +189,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     try {
                         // Core renders (kiosk + member)
                         App.renderLivePresent && App.renderLivePresent();
+                        App.renderKioskLeaderboard && App.renderKioskLeaderboard();
                         App.renderCheckinNotice && App.renderCheckinNotice();
                         App.updateNotificationBadge && App.updateNotificationBadge();
 

@@ -347,8 +347,22 @@
                                     <option value="unpaid">Unpaid / Expired Check-ins Only</option>
                                 </select>
                             </div>
+                            <div style="flex:1; min-width: 150px;">
+                                <label class="text-gray"><strong>Sort By</strong></label>
+                                <select id="filter-visit-sort" onchange="App.renderVisitLog()" class="mt-1">
+                                    <option value="newest">Newest First</option>
+                                    <option value="name-asc">Name A-Z</option>
+                                    <option value="name-desc">Name Z-A</option>
+                                </select>
+                            </div>
+                            <div style="display:flex; align-items:center; padding-top: 1.5rem;">
+                                <label class="text-gray" style="display:flex; align-items:center; gap:0.4rem; cursor:pointer;">
+                                    <input type="checkbox" id="filter-visit-unpaid" onchange="App.renderVisitLog()">
+                                    <strong>Unpaid only</strong>
+                                </label>
+                            </div>
                             <div style="padding-top: 1.5rem;">
-                                <button class="btn-outline" onclick="document.getElementById('filter-visit-start').value=''; document.getElementById('filter-visit-end').value=''; document.getElementById('filter-visit-status').value='all'; App.renderVisitLog();">Clear Filters</button>
+                                <button class="btn-outline" onclick="document.getElementById('filter-visit-start').value=''; document.getElementById('filter-visit-end').value=''; document.getElementById('filter-visit-status').value='all'; document.getElementById('filter-visit-sort').value='newest'; document.getElementById('filter-visit-unpaid').checked=false; App.renderVisitLog();">Clear Filters</button>
                             </div>
                         </div>
                         

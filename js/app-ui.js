@@ -277,6 +277,11 @@ Object.assign(App, {
                     App.renderAdminDashboard(); 
                     document.getElementById('filter-visit-start').value = ''; 
                     document.getElementById('filter-visit-end').value = ''; 
+                    document.getElementById('filter-visit-status').value = 'all';
+                    const sortEl = document.getElementById('filter-visit-sort');
+                    if (sortEl) sortEl.value = 'newest';
+                    const unpaidToggle = document.getElementById('filter-visit-unpaid');
+                    if (unpaidToggle) unpaidToggle.checked = false;
                     App.renderVisitLog(); 
                 }
                 if (targetPane === 'admin-notifications') { App.renderNotifications(); App.renderNotificationBin(); App.switchTab('notifications', 'list'); }

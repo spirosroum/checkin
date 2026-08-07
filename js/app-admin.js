@@ -85,7 +85,8 @@ Object.assign(App, {
                         html += `
                             <div style="border: 1px solid var(--gray-light); padding: 10px; background: ${bg}; border-radius: 4px; cursor:pointer;" onclick="App.filterVisitsByDate('${dateStr}')">
                                 <strong style="display:block; margin-bottom:5px;">${day}</strong>
-                                <span style="font-size:0.85rem; color:var(--dark); font-weight:600;">${vCount} v.${unpaidCount > 0 ? ' • Unpaid' : ''}</span>
+                                <span style="font-size:0.85rem; color:var(--dark); font-weight:600;">${vCount} v.</span>
+                                ${unpaidCount > 0 ? `<span class="badge badge-inactive" style="margin-left:2px;">${unpaidCount} unpaid</span>` : ''}
                             </div>
                         `;
                 }
@@ -98,6 +99,9 @@ Object.assign(App, {
                 document.getElementById('filter-visit-start').value = dateStr;
                 document.getElementById('filter-visit-end').value = dateStr;
                 document.getElementById('filter-visit-status').value = 'all';
+                document.getElementById('filter-visit-sort').value = 'newest';
+                const unpaidToggle = document.getElementById('filter-visit-unpaid');
+                if (unpaidToggle) unpaidToggle.checked = false;
                 App.renderVisitLog();
             },
 
@@ -139,17 +143,31 @@ Object.assign(App, {
             },
 
             renderVisitLog: () => {
-                let visits = DB.getVisits().sort((a, b) => new Date(b.entryTime) - new Date(a.entryTime));
+                let visits = DB.getVisits();
                 const members = DB.getMembers();
                 const binMembers = DB.getBin();
                 const startFilter = document.getElementById('filter-visit-start').value;
                 const endFilter = document.getElementById('filter-visit-end').value;
-                const statusFilter = document.getElementById('filter-visit-status').value;
+                const unpaidOnly = document.getElementById('filter-visit-unpaid').checked;
+                const statusFilter = unpaidOnly ? 'unpaid' : document.getElementById('filter-visit-status').value;
+                const sortBy = document.getElementById('filter-visit-sort').value;
 
                 if (startFilter) { const sd = new Date(startFilter); sd.setHours(0,0,0,0); visits = visits.filter(v => new Date(v.entryTime) >= sd); }
                 if (endFilter) { const ed = new Date(endFilter); ed.setHours(23,59,59,999); visits = visits.filter(v => new Date(v.entryTime) <= ed); }
                 if (statusFilter === 'active') { visits = visits.filter(v => !v.isUnpaid); }
                 if (statusFilter === 'unpaid') { visits = visits.filter(v => v.isUnpaid); }
+
+                const nameMap = new Map();
+                members.forEach(m => nameMap.set(m.id, `${m.firstName} ${m.lastName}`.toLowerCase()));
+                binMembers.forEach(m => { if (!nameMap.has(m.id)) nameMap.set(m.id, `${m.firstName} ${m.lastName}`.toLowerCase()); });
+
+                if (sortBy === 'name-asc') {
+                    visits.sort((a, b) => (nameMap.get(a.memberId) || '').localeCompare(nameMap.get(b.memberId) || ''));
+                } else if (sortBy === 'name-desc') {
+                    visits.sort((a, b) => (nameMap.get(b.memberId) || '').localeCompare(nameMap.get(a.memberId) || ''));
+                } else {
+                    visits.sort((a, b) => new Date(b.entryTime) - new Date(a.entryTime));
+                }
 
                 const list = document.getElementById('visit-log-list');
                 let unpaidCount = 0;
