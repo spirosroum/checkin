@@ -84,38 +84,381 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             }
         }
 
-        function saveToCloud() {
-            // Ensure db initialized
-            if (!db || !db.collection) {
-                fallbackToLocal();
-                return Promise.resolve();
-            }
+        // =====================================================================
+        // FIRESTORE PER-RECORD SYNC ENGINE
+        // Replaces the legacy single-document (gym/data) architecture.
+        //
+        // Every logical collection maps to a Firestore collection of per-record
+        // documents (docId == record.id), so concurrent kiosk check-ins no
+        // longer overwrite each other's entire document (the old last-write-wins
+        // data-loss bug) and documents stay far below the 1 MiB limit.
+        // Writes are debounced and diffed against a mirror of the last-known
+        // cloud state. schedules/closedDates stay in single small array docs
+        // because their order matters and only the admin writes them.
+        // =====================================================================
+        const CLOUD_COLLECTIONS = {
+            members:         { state: 'members',         key: rec => rec.id },
+            visits:          { state: 'visits',          key: rec => rec.id },
+            payments:        { state: 'payments',        key: rec => rec.id },
+            plans:           { state: 'plans',           key: rec => rec.id },
+            planBin:         { state: 'planBin',         key: rec => rec.id },
+            scheduleBin:     { state: 'scheduleBin',     key: rec => rec.id },
+            notificationBin: { state: 'notificationBin', key: rec => rec.id },
+            classCheckins:   { state: 'classCheckins',   key: rec => rec.id },
+            notifications:   { state: 'notifications',   key: rec => rec.id },
+            bin:             { state: 'bin',             key: rec => rec.id }
+        };
+        const ARRAY_DOCS = {
+            schedules:   { state: 'schedules',   doc: 'global' },
+            closedDates: { state: 'closedDates', doc: 'global' }
+        };
+        // Collections only the authenticated admin client may write. Anonymous
+        // kiosk clients skip them — including them would fail the whole batch.
+        const ADMIN_ONLY_COLLECTIONS = new Set(['payments', 'plans', 'planBin', 'scheduleBin', 'notificationBin', 'bin']);
 
-            const payload = {
-                members: STATE.members || [],
-                visits: STATE.visits || [],
-                payments: STATE.payments || [],
-                plans: STATE.plans || [],
-                planBin: STATE.planBin || [],
-                closedDates: STATE.closedDates || [],
-                schedules: STATE.schedules || [],
-                scheduleBin: STATE.scheduleBin || [],
-                notifications: STATE.notifications || [],
-                notificationBin: STATE.notificationBin || [],
-                bin: STATE.bin || [],
-                classCheckins: STATE.classCheckins || [],
+        function cloudRecordKey(col, rec) {
+            try { return CLOUD_COLLECTIONS[col].key(rec) || ''; } catch (e) { return ''; }
+        }
+
+        function settingsPayload() {
+            return {
                 portalName: STATE.portalName || '🥋 BJJ Kiosk Portal',
                 hiddenBelts: STATE.hiddenBelts || [],
                 currency: STATE.currency || '€',
                 checkinNotice: STATE.checkinNotice || '',
-                checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a',
-                updatedAt: new Date().toISOString()
+                checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a'
             };
+        }
 
-            return db.collection('gym').doc('data').set(payload).catch(err => {
-                console.error('Failed to save to Firestore, falling back to local:', err);
-                fallbackToLocal();
+        const FSEngine = {
+            db: null,
+            mirrors: {},          // per-record collection -> Map(docId -> JSON string of record)
+            arrayMirrors: {},     // array-doc collection -> JSON string of items
+            lastDocs: {},         // per-record collection -> last snapshot records
+            ready: {},            // collection -> first snapshot received
+            settingsReady: false,
+            settingsMirror: '',
+            dirty: new Set(),     // collections with local changes not yet flushed
+            renames: [],          // member id renames {oldId, newId} awaiting the delete pass
+            deferredDeletes: [],  // member rename deletes to run after the id update lands
+            flushTimer: null,
+            flushPromise: null,
+            _resolveFlush: null,
+            retryTimer: null,
+            migrationResolved: false,
+            migratePoll: null,
+
+            isAdminClient: () => { try { return !!App.isAdminAuthed && App.isAdminAuthed(); } catch (e) { return false; } },
+
+            notifyRename: function (oldId, newId) { this.renames.push({ oldId, newId }); },
+
+            // Debounce: one check-in triggers several DB setters in a row —
+            // collapse them into a single flush so Firestore sees one small batch.
+            scheduleFlush: function () {
+                if (!this.flushPromise) {
+                    this.flushPromise = new Promise(resolve => { this._resolveFlush = resolve; });
+                }
+                if (this.flushTimer) clearTimeout(this.flushTimer);
+                this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flush(); }, 600);
+                return this.flushPromise;
+            },
+            resolveFlush: function () {
+                if (this._resolveFlush) { const r = this._resolveFlush; this._resolveFlush = null; this.flushPromise = null; r(); }
+            },
+            flush: function () {
+                try { this.diffAndWrite(); } catch (e) { console.error('Flush failed:', e); } finally { this.resolveFlush(); }
+            },
+            commitOps: async function (ops) {
+                const batch = this.db.batch();
+                ops.forEach(op => {
+                    const ref = this.db.collection(op.col).doc(op.key);
+                    if (op.type === 'delete') batch.delete(ref);
+                    else batch.set(ref, op.data, { merge: true });
+                });
+                await batch.commit();
+            },
+            // Ops an anonymous kiosk client is allowed to perform. Skipped ops are
+            // left for the admin client to perform later (rules deny them for kiosk).
+            kioskCanWrite: function (op) {
+                if (op.type === 'set' || op.type === 'update') {
+                    return op.col === 'members' || op.col === 'visits' || op.col === 'classCheckins' || op.col === 'notifications';
+                }
+                if (op.type === 'delete') return !!op.kioskAllowed; // member rename deletes only
+                return false;
+            },
+            diffAndWrite: async function () {
+                const self = this;
+                if (!this.db || !this.db.collection) return;
+                const isAdmin = this.isAdminClient();
+                const ops = [];
+                const mirrorUpdates = []; // applied only after commits succeed
+                const flushedCols = new Set();
+
+                Object.keys(CLOUD_COLLECTIONS).forEach(col => {
+                    if (!self.ready[col]) return; // wait for the first snapshot before writing
+                    if (!isAdmin && ADMIN_ONLY_COLLECTIONS.has(col)) return;
+                    const cfg = CLOUD_COLLECTIONS[col];
+                    const arr = STATE[cfg.state] || [];
+                    const mirror = self.mirrors[col] || new Map();
+                    const stateKeys = new Set();
+                    arr.forEach(rec => {
+                        const key = cloudRecordKey(col, rec);
+                        if (!key) return;
+                        stateKeys.add(key);
+                        const json = JSON.stringify(rec);
+                        if (mirror.get(key) !== json) {
+                            ops.push({ col, key, type: 'set', data: rec });
+                            mirrorUpdates.push({ col, key, action: 'set', json });
+                        }
+                    });
+                    mirror.forEach((json, key) => {
+                        if (stateKeys.has(key)) return;
+                        if (col === 'members') {
+                            const rename = self.renames.find(r => r.oldId === key);
+                            if (rename) {
+                                // Update the old doc's id field first; its delete is
+                                // deferred until the update lands (kiosk deletes are
+                                // only allowed when id != docId).
+                                ops.push({ col, key, type: 'update', data: { id: rename.newId } });
+                                mirrorUpdates.push({ col, key, action: 'set', json: JSON.stringify(Object.assign({}, JSON.parse(json), { id: rename.newId })) });
+                                self.deferredDeletes.push({ col, key });
+                                return;
+                            }
+                        }
+                        ops.push({ col, key, type: 'delete' });
+                        mirrorUpdates.push({ col, key, action: 'delete' });
+                    });
+                });
+                self.renames = [];
+
+                Object.keys(ARRAY_DOCS).forEach(col => {
+                    if (!self.ready[col]) return;
+                    if (!isAdmin) return;
+                    const cfg = ARRAY_DOCS[col];
+                    const json = JSON.stringify(STATE[cfg.state] || []);
+                    if (json !== self.arrayMirrors[col]) {
+                        ops.push({ col, key: cfg.doc, type: 'set', data: { items: STATE[cfg.state] || [] } });
+                        mirrorUpdates.push({ col: col + ':array', key: cfg.doc, action: 'arraySet', json });
+                    }
+                });
+
+                if (this.settingsReady && isAdmin) {
+                    const json = JSON.stringify(settingsPayload());
+                    if (json !== this.settingsMirror) {
+                        ops.push({ col: 'settings', key: 'global', type: 'set', data: settingsPayload() });
+                        mirrorUpdates.push({ col: 'settings:doc', key: 'global', action: 'settingsSet', json });
+                    }
+                }
+
+                const allowed = ops.filter(op => isAdmin || self.kioskCanWrite(op));
+                allowed.forEach(op => flushedCols.add(op.col));
+
+                if (allowed.length === 0) return;
+
+                for (let i = 0; i < allowed.length; i += 450) {
+                    try {
+                        await this.commitOps(allowed.slice(i, i + 450));
+                    } catch (err) {
+                        // Mirrors are untouched on failure so the retry re-generates
+                        // the same diffs instead of seeing a "no change" state.
+                        console.error('Firestore batch write failed (will retry):', err);
+                        fallbackToLocal();
+                        if (!self.retryTimer) self.retryTimer = setTimeout(() => { self.retryTimer = null; self.flush(); }, 5000);
+                        return;
+                    }
+                }
+
+                // Now that the writes landed, update the local mirrors.
+                mirrorUpdates.forEach(u => {
+                    if (u.action === 'delete') {
+                        const m = self.mirrors[u.col];
+                        if (m) m.delete(u.key);
+                    } else if (u.action === 'arraySet') {
+                        self.arrayMirrors[u.col.replace(':array', '')] = u.json;
+                    } else if (u.action === 'settingsSet') {
+                        self.settingsMirror = u.json;
+                    } else {
+                        const m = self.mirrors[u.col] || new Map();
+                        if (u.action === 'set') m.set(u.key, u.json);
+                        self.mirrors[u.col] = m;
+                    }
+                });
+
+                // Member renames: delete the old doc only after its id field has
+                // been updated (the sequential awaits guarantee ordering).
+                if (self.deferredDeletes.length) {
+                    const next = self.deferredDeletes;
+                    self.deferredDeletes = [];
+                    try {
+                        await this.commitOps(next.map(d => ({ col: d.col, key: d.key, type: 'delete', kioskAllowed: true })));
+                        next.forEach(d => { const m = self.mirrors[d.col]; if (m) m.delete(d.key); });
+                    } catch (err) {
+                        console.error('Firestore deferred member delete failed:', err);
+                        self.deferredDeletes = next.concat(self.deferredDeletes);
+                    }
+                }
+
+                flushedCols.forEach(col => self.dirty.delete(col));
+            },
+
+            // One-time migration from the legacy single document (gym/data).
+            // Only an authenticated admin can complete it (kiosk clients cannot
+            // write admin-only collections); kiosks keep serving from local state
+            // and poll meta/migration until the admin's migration lands.
+            migrate: async function () {
+                try {
+                    if (!this.db || !this.db.collection) return false;
+                    const metaRef = this.db.collection('meta').doc('migration');
+                    const meta = await metaRef.get();
+                    if (meta.exists && meta.data() && meta.data().done) { resolveMigrationState(); return true; }
+                    if (!this.isAdminClient()) return false;
+                    const legacy = await this.db.collection('gym').doc('data').get();
+                    if (!legacy.exists) {
+                        await metaRef.set({ done: true, migratedAt: new Date().toISOString(), note: 'no legacy document' });
+                        resolveMigrationState();
+                        return true;
+                    }
+                    const data = legacy.data() || {};
+                    const ops = [];
+                    Object.keys(CLOUD_COLLECTIONS).forEach(col => {
+                        const cfg = CLOUD_COLLECTIONS[col];
+                        (Array.isArray(data[cfg.state]) ? data[cfg.state] : []).forEach(rec => {
+                            const key = cloudRecordKey(col, rec);
+                            if (key) ops.push({ col, key, type: 'set', data: rec });
+                        });
+                    });
+                    Object.keys(ARRAY_DOCS).forEach(col => {
+                        const cfg = ARRAY_DOCS[col];
+                        if (Array.isArray(data[cfg.state])) ops.push({ col, key: cfg.doc, type: 'set', data: { items: data[cfg.state] } });
+                    });
+                    ops.push({ col: 'settings', key: 'global', type: 'set', data: settingsPayload() });
+                    for (let i = 0; i < ops.length; i += 450) {
+                        await this.commitOps(ops.slice(i, i + 450));
+                    }
+                    await metaRef.set({ done: true, migratedAt: new Date().toISOString(), records: ops.length });
+                    await legacy.ref.delete();
+                    resolveMigrationState();
+                    console.log('Migrated legacy gym/data to per-record collections (' + ops.length + ' ops).');
+                    return true;
+                } catch (err) {
+                    console.warn('Legacy migration deferred (will retry):', err && err.message ? err.message : err);
+                    return false;
+                }
+            }
+        };
+
+        function markDirtyCollections() {
+            Object.keys(CLOUD_COLLECTIONS).forEach(col => {
+                if (!FSEngine.ready[col]) { FSEngine.dirty.add(col); return; }
+                const cfg = CLOUD_COLLECTIONS[col];
+                const arr = STATE[cfg.state] || [];
+                const mirror = FSEngine.mirrors[col] || new Map();
+                if (arr.length !== mirror.size) { FSEngine.dirty.add(col); return; }
+                const seen = new Set();
+                for (let i = 0; i < arr.length; i++) {
+                    const key = cloudRecordKey(col, arr[i]);
+                    if (!key || seen.has(key) || !mirror.has(key) || mirror.get(key) !== JSON.stringify(arr[i])) { FSEngine.dirty.add(col); return; }
+                    seen.add(key);
+                }
+                for (const k of mirror.keys()) if (!seen.has(k)) { FSEngine.dirty.add(col); return; }
             });
+            Object.keys(ARRAY_DOCS).forEach(col => {
+                if (!FSEngine.ready[col]) { FSEngine.dirty.add(col); return; }
+                if (JSON.stringify(STATE[ARRAY_DOCS[col].state] || []) !== FSEngine.arrayMirrors[col]) FSEngine.dirty.add(col);
+            });
+            if (FSEngine.settingsReady && JSON.stringify(settingsPayload()) !== FSEngine.settingsMirror) FSEngine.dirty.add('settings');
+        }
+
+        function saveToCloud() {
+            // Always persist locally first — the app must work offline too.
+            markDirtyCollections();
+            fallbackToLocal();
+            if (!FSEngine.db || !FSEngine.db.collection) return Promise.resolve();
+            return FSEngine.scheduleFlush();
+        }
+
+        function applyCollectionSnapshotData(col) {
+            if (FSEngine.dirty.has(col)) return; // local changes pending — keep local state
+            const cfg = CLOUD_COLLECTIONS[col];
+            const docs = FSEngine.lastDocs[col] || [];
+            const arr = [];
+            const seen = new Set();
+            docs.forEach(rec => {
+                const key = cloudRecordKey(col, rec);
+                if (key && !seen.has(key)) { seen.add(key); arr.push(rec); }
+            });
+            STATE[cfg.state] = arr;
+        }
+
+        function handleCollectionSnapshot(col) {
+            return (snapshot) => {
+                const mirror = new Map();
+                const docs = [];
+                snapshot.forEach(d => { const rec = d.data(); if (rec && typeof rec === 'object') { docs.push(rec); mirror.set(d.id, JSON.stringify(rec)); } });
+                FSEngine.mirrors[col] = mirror;
+                FSEngine.lastDocs[col] = docs;
+                FSEngine.ready[col] = true;
+                if (FSEngine.migrationResolved) { applyCollectionSnapshotData(col); fallbackToLocal(); renderAfterCloudSync(); }
+                if (FSEngine.dirty.has(col)) FSEngine.scheduleFlush();
+            };
+        }
+
+        function handleArrayDocSnapshot(col) {
+            return (doc) => {
+                const items = (doc.exists && doc.data() && Array.isArray(doc.data().items)) ? doc.data().items : [];
+                FSEngine.arrayMirrors[col] = JSON.stringify(items);
+                FSEngine.ready[col] = true;
+                if (FSEngine.migrationResolved && !FSEngine.dirty.has(col)) {
+                    STATE[ARRAY_DOCS[col].state] = items;
+                    fallbackToLocal();
+                    renderAfterCloudSync();
+                }
+                if (FSEngine.dirty.has(col)) FSEngine.scheduleFlush();
+            };
+        }
+
+        function resolveMigrationState() {
+            if (FSEngine.migrationResolved) return;
+            FSEngine.migrationResolved = true;
+            Object.keys(CLOUD_COLLECTIONS).forEach(col => applyCollectionSnapshotData(col));
+            Object.keys(ARRAY_DOCS).forEach(col => {
+                if (!FSEngine.dirty.has(col)) STATE[ARRAY_DOCS[col].state] = FSEngine.arrayMirrors[col] ? JSON.parse(FSEngine.arrayMirrors[col]) : [];
+            });
+            fallbackToLocal();
+            renderAfterCloudSync();
+            FSEngine.scheduleFlush();
+        }
+
+        function renderAfterCloudSync() {
+            try { document.getElementById('kiosk-title-display').innerText = STATE.portalName; } catch (e) {}
+            try {
+                App.renderLivePresent && App.renderLivePresent();
+                App.renderKioskLeaderboard && App.renderKioskLeaderboard();
+                App.renderCheckinNotice && App.renderCheckinNotice();
+                App.updateNotificationBadge && App.updateNotificationBadge();
+                if (App.isAdminAuthed()) {
+                    App.renderMemberDirectory && App.renderMemberDirectory();
+                    App.renderMemberBin && App.renderMemberBin();
+                    App.renderPlans && App.renderPlans();
+                    App.renderPlanBin && App.renderPlanBin();
+                    App.renderSchedules && App.renderSchedules();
+                    App.renderScheduleBin && App.renderScheduleBin();
+                    App.renderNotifications && App.renderNotifications();
+                    App.renderNotificationBin && App.renderNotificationBin();
+                    App.renderVisitLog && App.renderVisitLog();
+                    App.renderAdminDashboard && App.renderAdminDashboard();
+                    App.renderAllPayments && App.renderAllPayments();
+                    App.renderAnalyticalCalendar && App.renderAnalyticalCalendar();
+                }
+                try { App.renderCalendarView && App.renderCalendarView('kiosk-schedule-container', false); } catch (e) {}
+                if (App.isAdminAuthed()) {
+                    try { App.renderCalendarView && App.renderCalendarView('master-schedule-container', true); } catch (e) {}
+                }
+                if (typeof window.renderSchedule === 'function') try { window.renderSchedule(); } catch (e) {}
+                if (typeof window.renderUI === 'function') try { window.renderUI(); } catch (e) {}
+                if (typeof window.updateDashboard === 'function') try { window.updateDashboard(); } catch (e) {}
+                App.updateUICurrency && App.updateUICurrency();
+            } catch (e) { console.warn('Error while re-rendering after Firestore update', e); }
         }
 
         function initRealtimeSync() {
@@ -125,108 +468,39 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     return;
                 }
                 db = firebase.firestore();
-                const docRef = db.collection('gym').doc('data');
+                FSEngine.db = db;
 
-                docRef.onSnapshot((doc) => {
-                    if (!doc.exists) {
-                        // No doc yet — write initial state
-                        saveToCloud();
-                        return;
-                    }
-
-                    const data = doc.data() || {};
-
-                    // Only overwrite STATE properties that are present in the cloud snapshot.
-                    // This avoids accidentally clearing fields when a snapshot omits a key.
-                    try {
-                        if (Object.prototype.hasOwnProperty.call(data, 'members')) STATE.members = Array.isArray(data.members) ? data.members : STATE.members || [];
-                        if (Object.prototype.hasOwnProperty.call(data, 'visits')) STATE.visits = Array.isArray(data.visits) ? data.visits : STATE.visits || [];
-                        if (Object.prototype.hasOwnProperty.call(data, 'payments')) STATE.payments = Array.isArray(data.payments) ? data.payments : STATE.payments || [];
-                        if (Object.prototype.hasOwnProperty.call(data, 'plans')) STATE.plans = Array.isArray(data.plans) ? data.plans : STATE.plans || [];
-                        if (Object.prototype.hasOwnProperty.call(data, 'planBin')) STATE.planBin = Array.isArray(data.planBin) ? data.planBin : STATE.planBin || [];
-                        if (Object.prototype.hasOwnProperty.call(data, 'closedDates')) STATE.closedDates = Array.isArray(data.closedDates) ? data.closedDates : STATE.closedDates || [];
-                        if (Object.prototype.hasOwnProperty.call(data, 'schedules')) STATE.schedules = Array.isArray(data.schedules) ? data.schedules : STATE.schedules || [];
-                        if (Object.prototype.hasOwnProperty.call(data, 'scheduleBin')) STATE.scheduleBin = Array.isArray(data.scheduleBin) ? data.scheduleBin : STATE.scheduleBin || [];
-                        if (Object.prototype.hasOwnProperty.call(data, 'notifications')) STATE.notifications = Array.isArray(data.notifications) ? data.notifications : STATE.notifications || [];
-                        if (Object.prototype.hasOwnProperty.call(data, 'notificationBin')) STATE.notificationBin = Array.isArray(data.notificationBin) ? data.notificationBin : STATE.notificationBin || [];
-                        if (Object.prototype.hasOwnProperty.call(data, 'bin')) STATE.bin = Array.isArray(data.bin) ? data.bin : STATE.bin || [];
-                        if (Object.prototype.hasOwnProperty.call(data, 'classCheckins')) STATE.classCheckins = Array.isArray(data.classCheckins) ? data.classCheckins : STATE.classCheckins || [];
- 
-                        if (Object.prototype.hasOwnProperty.call(data, 'portalName')) STATE.portalName = data.portalName || STATE.portalName || '🥋 BJJ Kiosk Portal';
-                        if (Object.prototype.hasOwnProperty.call(data, 'hiddenBelts')) STATE.hiddenBelts = Array.isArray(data.hiddenBelts) ? data.hiddenBelts : STATE.hiddenBelts || [];
-                        if (Object.prototype.hasOwnProperty.call(data, 'currency')) STATE.currency = data.currency || STATE.currency || '€';
-                        if (Object.prototype.hasOwnProperty.call(data, 'checkinNotice')) STATE.checkinNotice = data.checkinNotice || STATE.checkinNotice || '';
-                        if (Object.prototype.hasOwnProperty.call(data, 'checkinNoticeColor')) STATE.checkinNoticeColor = data.checkinNoticeColor || STATE.checkinNoticeColor || '#fde68a';
-                    } catch (e) {
-                        console.warn('Error applying snapshot to local STATE:', e);
-                    }
-
-                    // Persist snapshot into localStorage so local fallback won't later re-introduce stale data.
-                    try {
-                        localStorage.setItem('gym_members', JSON.stringify(STATE.members || []));
-                        localStorage.setItem('gym_visits', JSON.stringify(STATE.visits || []));
-                        localStorage.setItem('gym_payments', JSON.stringify(STATE.payments || []));
-                        localStorage.setItem('gym_plans', JSON.stringify(STATE.plans || []));
-                        localStorage.setItem('gym_plan_bin', JSON.stringify(STATE.planBin || []));
-                        localStorage.setItem('gym_closed_dates', JSON.stringify(STATE.closedDates || []));
-                        localStorage.setItem('gym_schedules', JSON.stringify(STATE.schedules || []));
-                        localStorage.setItem('gym_schedule_bin', JSON.stringify(STATE.scheduleBin || []));
-                        localStorage.setItem('gym_notifications', JSON.stringify(STATE.notifications || []));
-                        localStorage.setItem('gym_notification_bin', JSON.stringify(STATE.notificationBin || []));
-                        localStorage.setItem('gym_bin', JSON.stringify(STATE.bin || []));
-                        localStorage.setItem('gym_class_checkins', JSON.stringify(STATE.classCheckins || []));
-                        localStorage.setItem('gym_portal_name', STATE.portalName || '🥋 BJJ Kiosk Portal');
-                        localStorage.setItem('gym_hidden_belts', JSON.stringify(STATE.hiddenBelts || []));
-                        localStorage.setItem('gym_currency', STATE.currency || '€');
-                        localStorage.setItem('gym_checkin_notice', STATE.checkinNotice || '');
-                        localStorage.setItem('gym_checkin_notice_color', STATE.checkinNoticeColor || '#fde68a');
-                    } catch (e) { console.warn('Failed to persist snapshot to localStorage', e); }
-
-                    // Update UI elements that depend on settings
-                    try { document.getElementById('kiosk-title-display').innerText = STATE.portalName; } catch(e){}
-
-                    // Explicitly call all known render/update functions so DOM immediately reflects cloud data.
-                    try {
-                        // Core renders (kiosk + member)
-                        App.renderLivePresent && App.renderLivePresent();
-                        App.renderKioskLeaderboard && App.renderKioskLeaderboard();
-                        App.renderCheckinNotice && App.renderCheckinNotice();
-                        App.updateNotificationBadge && App.updateNotificationBadge();
-
-                        // Admin-only renders — only run while an authenticated admin session exists.
-                        // These target elements inside #view-admin, which is removed from the DOM
-                        // unless the admin is signed in.
-                        if (App.isAdminAuthed()) {
-                            App.renderMemberDirectory && App.renderMemberDirectory();
-                            App.renderMemberBin && App.renderMemberBin();
-                            App.renderPlans && App.renderPlans();
-                            App.renderPlanBin && App.renderPlanBin();
-                            App.renderSchedules && App.renderSchedules();
-                            App.renderScheduleBin && App.renderScheduleBin();
-                            App.renderNotifications && App.renderNotifications();
-                            App.renderNotificationBin && App.renderNotificationBin();
-                            App.renderVisitLog && App.renderVisitLog();
-                            App.renderAdminDashboard && App.renderAdminDashboard();
-                            App.renderAllPayments && App.renderAllPayments();
-                            App.renderAnalyticalCalendar && App.renderAnalyticalCalendar();
-                        }
-
-                        // Ensure calendar/kiosk schedule containers are refreshed
-                        try { App.renderCalendarView && App.renderCalendarView('kiosk-schedule-container', false); } catch(e){}
-                        if (App.isAdminAuthed()) {
-                            try { App.renderCalendarView && App.renderCalendarView('master-schedule-container', true); } catch(e){}
-                        }
-
-                        // Call any legacy or external-named renderers if they exist on the page
-                        if (typeof window.renderSchedule === 'function') try { window.renderSchedule(); } catch(e) {}
-                        if (typeof window.renderUI === 'function') try { window.renderUI(); } catch(e) {}
-                        if (typeof window.updateDashboard === 'function') try { window.updateDashboard(); } catch(e) {}
-
-                    } catch (e) { console.warn('Error while re-rendering after Firestore update', e); }
-
-                }, (err) => {
-                    console.error('Realtime listener error:', err);
+                Object.keys(CLOUD_COLLECTIONS).forEach(col => {
+                    db.collection(col).onSnapshot(handleCollectionSnapshot(col), err => console.error('Firestore listener error (' + col + '):', err));
                 });
+                Object.keys(ARRAY_DOCS).forEach(col => {
+                    db.collection(col).doc('global').onSnapshot(handleArrayDocSnapshot(col), err => console.error('Firestore listener error (' + col + '):', err));
+                });
+                db.collection('settings').doc('global').onSnapshot(doc => {
+                    if (doc.exists) {
+                        const d = doc.data() || {};
+                        if (d.portalName != null) STATE.portalName = d.portalName;
+                        if (Array.isArray(d.hiddenBelts)) STATE.hiddenBelts = d.hiddenBelts;
+                        if (d.currency != null) STATE.currency = d.currency;
+                        if (d.checkinNotice != null) STATE.checkinNotice = d.checkinNotice;
+                        if (d.checkinNoticeColor != null) STATE.checkinNoticeColor = d.checkinNoticeColor;
+                        FSEngine.settingsMirror = JSON.stringify(settingsPayload());
+                    }
+                    FSEngine.settingsReady = true;
+                    if (!FSEngine.dirty.has('settings')) { fallbackToLocal(); renderAfterCloudSync(); }
+                    if (FSEngine.dirty.has('settings')) FSEngine.scheduleFlush();
+                }, err => console.error('Firestore settings listener error:', err));
+
+                // One-time migration from the legacy single document (admin only).
+                FSEngine.migrate();
+                // Kiosk clients cannot migrate; poll for the admin-completed marker
+                // so they can switch from local state to the per-record collections.
+                if (FSEngine.migratePoll) clearInterval(FSEngine.migratePoll);
+                FSEngine.migratePoll = setInterval(async () => {
+                    if (FSEngine.migrationResolved) { clearInterval(FSEngine.migratePoll); return; }
+                    const done = await FSEngine.migrate();
+                    if (done) clearInterval(FSEngine.migratePoll);
+                }, 15000);
 
             } catch (err) {
                 console.warn('Failed to initialize realtime sync', err);
@@ -786,6 +1060,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     }
                 }
                 App.bindAdminListeners();
+                // Flush any pending local writes under admin privileges and retry
+                // the legacy migration if it wasn't completable in kiosk mode.
+                try { FSEngine.scheduleFlush(); FSEngine.migrate(); } catch (e) { console.warn('Admin unlock sync error:', e); }
                 App.renderColorPaletteUI && App.renderColorPaletteUI();
                 App.renderColumnConfigurator && App.renderColumnConfigurator();
                 const monthInput = document.getElementById('export-month-picker');
@@ -895,6 +1172,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 window.App = App;
 window.DB = DB;
 window.Utils = Utils;
+window.FSEngine = FSEngine;
 
 {
 // Initialize Firebase compat app (used by the firestore-compat API)

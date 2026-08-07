@@ -137,6 +137,9 @@ Object.assign(App, {
                 if (index > -1) {
                     members[index].id = newId;
                     DB.saveMembers(members);
+                    // Tell the sync engine so it can move the member doc
+                    // (create new docId + defer deleting the old one).
+                    FSEngine.notifyRename(oldId, newId);
                     
                     const visits = DB.getVisits();
                     visits.forEach(v => { if (v.memberId === oldId) v.memberId = newId; });

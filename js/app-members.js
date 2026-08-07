@@ -562,6 +562,9 @@ Object.assign(App, {
                     let ccChanged = false;
                     checkins.forEach(c => { if (c.memberId === originalId) { c.memberId = id; ccChanged = true; } });
                     if (ccChanged) DB.saveClassCheckins(checkins);
+                    // Tell the sync engine so it can move the member doc
+                    // (create new docId + defer deleting the old one).
+                    FSEngine.notifyRename(originalId, id);
                 }
 
                 // Ensure new registration accountStatus is enforced based on payment+plan

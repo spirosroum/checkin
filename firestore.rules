@@ -1,0 +1,148 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =====================================================================
+    // GymDesk security rules (per-record architecture)
+    //
+    // Data lives in per-record collections (docId == record.id), plus a few
+    // small single array docs (schedules/global, closedDates/global) and
+    // settings/global. A one-time migration fans out the legacy gym/data
+    // document into these collections; the legacy doc is read-only after that.
+    //
+    //   * READ  : public — the kiosk and member portal must verify member IDs
+    //             and render the schedule/plans without signing in.
+    //   * WRITE : admin (Firebase Auth email below) may write everything.
+    //             Anonymous kiosk flows may ONLY:
+    //               - create/update visits and classCheckins (check-ins),
+    //               - create notifications (frozen/unpaid alerts),
+    //               - update member docs on sessionsLeft / id only
+    //                 (session decrement and self-service ID change), and
+    //                 create/delete member docs for self-service ID renames.
+    //
+    // DEPLOY: firebase deploy --only firestore:rules
+    // (or paste in Firebase Console -> Firestore Database -> Rules)
+    // =====================================================================
+
+    // The gym administrator account (must match ADMIN_EMAIL in js/app-core.js)
+    function isAdmin() {
+      return request.auth != null &&
+             request.auth.token.email != null &&
+             request.auth.token.email.lower() == 'spirosroumeliotis29@gmail.com';
+    }
+
+    // Anonymous kiosk / member self-service flows (no Firebase sign-in)
+    function isKiosk() {
+      return request.auth == null;
+    }
+
+    // Kiosk may only adjust session counts and its own ID on member docs —
+    // NOT expiration dates, account status, belt, plans, etc. This closes the
+    // legacy whole-document write escalation (kioskKeys() allowed rewriting
+    // the entire members array).
+    function kioskMemberUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sessionsLeft', 'id']);
+    }
+
+    // Kiosk check-in flows may only touch the timestamps/status of visits
+    // (check-out, auto-checkout, member-id rewrite) — never other fields.
+    function kioskVisitUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['exitTime', 'expectedExitTime', 'isUnpaid', 'memberId', 'entryTime']);
+    }
+
+    // Kiosk may only rewrite the memberId on class check-ins (ID changes).
+    function kioskClassCheckinUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberId']);
+    }
+
+    // Legacy single-document store: kept for history; admin writes only.
+    // Stale cached clients that still write gym/data are denied and fall back
+    // to local-only operation until they receive the updated code.
+    match /gym/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /settings/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /meta/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Single array docs (order-preserving; admin-written only)
+    match /schedules/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /closedDates/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /members/{docId} {
+      allow read: if true;
+      // Self-service ID change creates the new doc (id must match its docId)...
+      allow create: if isAdmin() || (isKiosk() && request.resource.data.id == docId);
+      // ...the kiosk may only touch session counts and its own id field...
+      allow update: if isAdmin() || (isKiosk() && kioskMemberUpdate());
+      // ...then the old doc is deleted (its id field now differs from docId,
+      // which also prevents kiosk clients from deleting other members' docs)
+      allow delete: if isAdmin() || (isKiosk() && resource.data.id != docId);
+    }
+
+    match /visits/{docId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if isAdmin() || (isKiosk() && kioskVisitUpdate());
+      allow delete: if isAdmin();
+    }
+
+    match /classCheckins/{docId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if isAdmin() || (isKiosk() && kioskClassCheckinUpdate());
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{docId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
+
+    match /payments/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /plans/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /planBin/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /scheduleBin/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /notificationBin/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /bin/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}
