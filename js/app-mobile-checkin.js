@@ -68,7 +68,8 @@ Object.assign(App, {
             showMobileCheckinView: () => {
                 const remembered = App.getMobileSessionMember();
                 if (remembered) {
-                    // Stay on the mobile check-in page with the class chooser ready to go.
+                    // Land on the check-in portal with the class chooser ready to go.
+                    App.showKioskCheckinPortal();
                     App.beginMobileCheckin(remembered);
                     return;
                 }
@@ -87,12 +88,14 @@ Object.assign(App, {
                 }
                 App.saveMobileSession(member.id);
                 input.value = '';
+                App.showKioskCheckinPortal();
                 App.beginMobileCheckin(member);
             },
 
             mobileCheckinGo: () => {
                 const member = App.getMobileSessionMember();
                 if (!member) { App.mobileCheckinSwitch(); return; }
+                App.showKioskCheckinPortal();
                 App.beginMobileCheckin(member);
             },
 
@@ -112,9 +115,6 @@ Object.assign(App, {
                     membershipAlert = 'Note: Your membership is about to end in ' + daysRemaining + ' days.';
                 }
                 App.pendingCheckinMember = { member, isUnpaidVisit, membershipAlert };
-                // Ensure the member stays on the mobile check-in page so cancelling the
-                // class chooser returns them to the check-in portal instead of the kiosk.
-                App.showMobileCheckinLanding();
                 App.openCheckinClassModal();
             },
 
@@ -170,11 +170,13 @@ Object.assign(App, {
             },
 
             // Dispatcher: shared class modal cancel/X buttons.
+            // In the mobile self check-in, cancelling returns the member to the
+            // check-in portal (view-kiosk) so they can start again.
             cancelCheckinSelection: () => {
                 if (App.isMobileCheckinMode) {
                     App.pendingCheckinMember = null;
                     App.closeModal('modal-checkin-classes');
-                    App.showMobileCheckinLanding();
+                    App.showKioskCheckinPortal();
                 } else {
                     App.cancelKioskClassSelection();
                 }

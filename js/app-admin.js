@@ -83,10 +83,10 @@ Object.assign(App, {
                         }
  
                         html += `
-                            <div style="border: 1px solid var(--gray-light); padding: 10px; background: ${bg}; border-radius: 4px; cursor:pointer;" onclick="App.filterVisitsByDate('${dateStr}')">
+                            <div style="border: 1px solid var(--gray-light); padding: 10px; background: ${bg}; border-radius: 4px; cursor:pointer; display:flex; flex-direction:column; align-items:center;" onclick="App.filterVisitsByDate('${dateStr}')">
                                 <strong style="display:block; margin-bottom:5px;">${day}</strong>
-                                <span style="font-size:0.85rem; color:var(--dark); font-weight:600;">${vCount} v.</span>
-                                ${unpaidCount > 0 ? `<span class="badge badge-inactive" style="margin-left:2px;">${unpaidCount} unpaid</span>` : ''}
+                                <span style="font-size:0.85rem; color:var(--dark); font-weight:600;">${vCount} people</span>
+                                ${unpaidCount > 0 ? `<span style="font-size:0.7rem; color:var(--danger); font-weight:600;">${unpaidCount} unpaid</span>` : ''}
                             </div>
                         `;
                 }
