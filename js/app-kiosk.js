@@ -598,18 +598,12 @@ Object.assign(App, {
 
                 container.innerHTML = `
                     <div class="kiosk-leaderboard">
-                        ${groups.map(group => `
+                        ${top.map(entry => `
                             <div class="kiosk-lb-card">
-                                <div class="kiosk-lb-rank">${App.leaderboardRankCell(group.rank)}</div>
-                                <div class="kiosk-lb-members">
-                                    ${group.members.map(entry => `
-                                        <div class="kiosk-lb-member-row">
-                                            <strong class="kiosk-lb-name">${Utils.escapeHTML(entry.member.firstName)} ${Utils.escapeHTML(entry.member.lastName)}</strong>
-                                            <span class="kiosk-lb-count-badge">${entry.count}</span>
-                                            <span class="kiosk-lb-belt">${Utils.getBeltBadge(entry.member.belt)}</span>
-                                        </div>
-                                    `).join('')}
-                                </div>
+                                <div class="kiosk-lb-rank">${App.leaderboardRankCell(entry.rank)}</div>
+                                <strong class="kiosk-lb-name">${Utils.escapeHTML(entry.member.firstName)} ${Utils.escapeHTML(entry.member.lastName)}</strong>
+                                <span class="kiosk-lb-count-badge">${entry.count}</span>
+                                <span class="kiosk-lb-belt">${Utils.getBeltBadge(entry.member.belt)}</span>
                             </div>
                         `).join('')}
                     </div>
