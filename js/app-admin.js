@@ -1,6 +1,6 @@
 // =====================================================================
 // app-admin.js
-// App methods: sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility
+// App methods: sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, getVisitPaidByInfo, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -140,6 +140,78 @@ Object.assign(App, {
                 document.body.removeChild(link);
             },
 
+            /**
+             * Returns the payment record that covers a given paid check-in visit,
+             * or null if no payment record can be attributed.
+             * Mirrors the reconciliation logic in reconcileMemberPaymentVisitStatus:
+             * 1. Payment explicitly cleared the visit (clearedVisitIds)
+             * 2. Visit falls inside a payment's applied date window (or the member's expiration window)
+             * 3. Visit is covered by remaining session quota (chronological consumption)
+             */
+            getVisitPaidByInfo: (v) => {
+                if (!v || v.isUnpaid) return null;
+                const payments = DB.getPayments().filter(p => p.memberId === v.memberId);
+                const member = DB.getMembers().find(m => m.id === v.memberId);
+
+                // 1. Explicitly cleared by a payment record
+                const explicit = payments.find(p => Array.isArray(p.clearedVisitIds) && p.clearedVisitIds.includes(v.id));
+                if (explicit) return explicit;
+
+                const entry = v.entryTime ? new Date(v.entryTime) : null;
+
+                // 2. Covered by a payment's applied date window (newest payment wins)
+                if (entry && !isNaN(entry.getTime())) {
+                    const datedPays = payments.filter(p => p.appliedExpiration).sort((a, b) => new Date(b.date) - new Date(a.date));
+                    const timePay = datedPays.find(p => {
+                        const start = new Date(p.appliedStartDate || p.date);
+                        const end = new Date(p.appliedExpiration);
+                        return !isNaN(start.getTime()) && !isNaN(end.getTime()) && entry >= start && entry <= end;
+                    });
+                    if (timePay) return timePay;
+
+                    // Covered by the member's current expiration window — attribute to the payment that set it
+                    if (member && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) {
+                        const end = new Date(member.expirationDate);
+                        if (!isNaN(end.getTime()) && entry <= end) {
+                            const expPay = payments
+                                .filter(p => p.appliedExpiration === member.expirationDate)
+                                .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+                            if (expPay) return expPay;
+                        }
+                    }
+                }
+
+                // 3. Covered by session quota — replicate chronological session consumption
+                const sessionPayments = payments.filter(p => p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0);
+                if (sessionPayments.length > 0) {
+                    const totalCapacity = sessionPayments.reduce((s, p) => s + parseInt(p.sessionsGranted, 10), 0);
+                    const memberVisits = DB.getVisits()
+                        .filter(x => x.memberId === v.memberId)
+                        .sort((a, b) => new Date(a.entryTime) - new Date(b.entryTime));
+                    let sessionsUsed = 0;
+                    const sessionsCoveredIds = [];
+                    memberVisits.forEach(x => {
+                        const xEntry = x.entryTime ? new Date(x.entryTime) : null;
+                        const xExplicit = payments.some(p => Array.isArray(p.clearedVisitIds) && p.clearedVisitIds.includes(x.id));
+                        const xTime = xEntry && !isNaN(xEntry.getTime()) && payments.some(p => {
+                            if (!p.appliedExpiration) return false;
+                            const start = new Date(p.appliedStartDate || p.date);
+                            const end = new Date(p.appliedExpiration);
+                            return !isNaN(start.getTime()) && !isNaN(end.getTime()) && xEntry >= start && xEntry <= end;
+                        });
+                        if (!xExplicit && !xTime && sessionsUsed < totalCapacity) {
+                            sessionsUsed++;
+                            sessionsCoveredIds.push(x.id);
+                        }
+                    });
+                    if (sessionsCoveredIds.includes(v.id)) {
+                        return sessionPayments.sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+                    }
+                }
+
+                return null;
+            },
+
             renderVisitLog: () => {
                 let visits = DB.getVisits();
                 const members = DB.getMembers();
@@ -180,6 +252,23 @@ Object.assign(App, {
                         ? `<strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong> <span class="text-gray">(${m.id})</span> <span class="badge badge-inactive" style="font-size:0.7rem;">Deleted Member</span>`
                         : `<strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong> <span class="text-gray">(${m.id})</span>`;
                     let statusHtml = v.isUnpaid ? `<span class="badge badge-inactive">Unpaid Check-in</span>` : `<span class="badge badge-active">OK</span>`;
+
+                    // Payment attribution: for paid check-ins, show which recorded payment covers this visit
+                    let paymentHtml = '<span class="text-gray">—</span>';
+                    if (!v.isUnpaid) {
+                        const pay = App.getVisitPaidByInfo(v);
+                        if (pay) {
+                            const plan = pay.planId ? DB.getPlans().find(p => p.id === pay.planId) : null;
+                            const planName = plan ? ` · ${Utils.escapeHTML(plan.name)}` : '';
+                            const payLabel = `<span class="badge badge-active" style="font-size:0.7rem;">Paid</span> ${DB.getCurrency()}${parseFloat(pay.amount).toFixed(2)}${planName} <span class="text-gray" style="font-size:0.8rem;">(${Utils.formatDate(pay.date)})</span>`;
+                            paymentHtml = pay.note
+                                ? `<div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">${payLabel}</div><div class="text-gray" style="font-size:0.8rem;">${Utils.escapeHTML(pay.note)}</div>`
+                                : `<div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">${payLabel}</div>`;
+                        } else {
+                            paymentHtml = `<span class="badge badge-active" style="font-size:0.7rem;">Paid</span> <span class="text-gray" style="font-size:0.8rem;">covered (no payment record)</span>`;
+                        }
+                    }
+
                     return `
                     <tr${isDeleted ? ' style="opacity:0.6;"' : ''}>
                         <td data-label="Date">${Utils.formatDate(v.entryTime)}</td>
@@ -190,9 +279,10 @@ Object.assign(App, {
                             <div class="text-gray" style="font-size:0.8rem;">${App.calcVisitDuration(v)}</div>
                         </td>
                         <td data-label="Status">${statusHtml}</td>
+                        <td data-label="Payment">${paymentHtml}</td>
                         <td data-label="Action" class="cell-actions"><button class="btn-outline btn-small" onclick="App.openVisitEditModal('${v.id}')">Edit</button></td>
                     </tr>
-                `}).join('') || '<tr><td colspan="6" class="text-center text-gray">No visits found matching filters.</td></tr>';
+                `}).join('') || '<tr><td colspan="7" class="text-center text-gray">No visits found matching filters.</td></tr>';
 
                 document.getElementById('visit-summary-grid').innerHTML = `
                     <div class="stat-card" style="padding: 1rem;"><h3>Filtered Total</h3><div class="value" style="font-size: 1.5rem;">${visits.length}</div></div>
