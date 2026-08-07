@@ -97,10 +97,13 @@ Object.assign(App, {
                 }
             },
 
-            loginAsMember: () => {
+            loginAsMember: async () => {
                 const input = document.getElementById('member-login-id');
                 const id = input.value.trim();
                 let member = null;
+                if (FSEngine && typeof FSEngine.whenReady === 'function' && !(FSEngine.ready.members && FSEngine.migrationResolved)) {
+                    await FSEngine.whenReady('members');
+                }
                 if (id) {
                     member = DB.getMembers().find(m => m.id === id);
                     if (!member) return alert("Member ID not found.");

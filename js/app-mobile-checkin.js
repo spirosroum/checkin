@@ -119,7 +119,7 @@ Object.assign(App, {
             },
 
             // Submit the member ID on the "link your Google account" screen.
-            mobileLinkSubmit: () => {
+            mobileLinkSubmit: async () => {
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
                 const input = document.getElementById('mobile-link-id');
@@ -131,6 +131,12 @@ Object.assign(App, {
                 }
                 const id = input.value.trim();
                 if (!id) return;
+                if (FSEngine && typeof FSEngine.whenReady === 'function' && !(FSEngine.ready.members && FSEngine.migrationResolved)) {
+                    msg.innerText = 'Loading member list…';
+                    msg.className = 'kiosk-msg warning';
+                    msg.classList.remove('hidden');
+                    await FSEngine.whenReady('members');
+                }
                 const member = DB.getMembers().find(m => m.id === id);
                 if (!member) {
                     input.value = '';
@@ -153,13 +159,17 @@ Object.assign(App, {
                 App.showMobileCheckinLanding();
             },
 
-            mobileCheckinSubmit: () => {
+            mobileCheckinSubmit: async () => {
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
                 const input = document.getElementById('mobile-checkin-id');
                 if (!input) return;
                 const id = input.value.trim();
                 if (!id) return;
+                if (FSEngine && typeof FSEngine.whenReady === 'function' && !(FSEngine.ready.members && FSEngine.migrationResolved)) {
+                    App.showKioskMessage('Loading member list…', 'warning');
+                    await FSEngine.whenReady('members');
+                }
                 const member = DB.getMembers().find(m => m.id === id);
                 if (!member) {
                     App.showKioskMessage(map.mobileMemberIdNotFound || 'Member ID not found.', 'danger');

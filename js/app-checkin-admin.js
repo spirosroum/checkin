@@ -88,11 +88,17 @@ Object.assign(App, {
                 App.renderCheckinNotice();
             },
  
-            handleAdminCheckinSearch: () => {
+            handleAdminCheckinSearch: async () => {
                 const query = document.getElementById('checkin-search').value.toLowerCase().trim();
                 const resultCard = document.getElementById('checkin-member-card');
                 if (!query) { resultCard.classList.add('hidden'); return; }
-                
+
+                if (FSEngine && typeof FSEngine.whenReady === 'function' && !(FSEngine.ready.members && FSEngine.migrationResolved)) {
+                    await FSEngine.whenReady('members');
+                }
+                // Stale keystroke guard: the query may have changed while we waited.
+                if (document.getElementById('checkin-search').value.toLowerCase().trim() !== query) return;
+
                 const members = DB.getMembers();
                 const m = members.find(m => 
                     m.id === query || 

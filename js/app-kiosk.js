@@ -142,11 +142,19 @@ Object.assign(App, {
                 }, 5000);
             },
 
-            kioskSubmit: () => {
+            kioskSubmit: async () => {
                 const input = document.getElementById('kiosk-id-input');
                 const id = input.value.trim();
                 if (!id) return;
                 input.value = ''; input.focus();
+
+                // Fresh clients (incognito, cleared cache) load members from the
+                // cloud on boot — wait for the first snapshot instead of failing
+                // the lookup against an empty local state.
+                if (FSEngine && typeof FSEngine.whenReady === 'function' && !(FSEngine.ready.members && FSEngine.migrationResolved)) {
+                    App.showKioskMessage('Loading member list…', 'warning');
+                    await FSEngine.whenReady('members');
+                }
 
                 const member = DB.getMembers().find(m => m.id === id);
                 if (!member) return App.showKioskMessage('Invalid ID. Member not found.', 'danger');

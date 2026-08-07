@@ -148,6 +148,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             settingsReady: false,
             settingsMirror: '',
             dirty: new Set(),     // collections with local changes not yet flushed
+            applied: new Set(),   // collections whose cloud state has been applied locally at least once
             // Member id renames {oldId, newId} awaiting the delete pass. Persisted
             // so a tab close / crash between "create new doc" and "delete old doc"
             // does not orphan the old doc (which would duplicate the member).
@@ -171,6 +172,25 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             isAdminClient: () => { try { return !!App.isAdminAuthed && App.isAdminAuthed(); } catch (e) { return false; } },
 
             notifyRename: function (oldId, newId) { this.renames.push({ oldId, newId }); this.persistPending(); },
+
+            // Resolves once the collection's first snapshot has been received AND
+            // the migration state is resolved — i.e. the point where STATE is a
+            // reliable view of the cloud data. Fresh clients (empty localStorage,
+            // e.g. incognito or a kiosk after cache clear) hit this as a 1-2s
+            // boot delay; lookups must wait for it instead of failing early.
+            whenReady: function (col, timeoutMs) {
+                const t = timeoutMs || 12000;
+                if (this.ready[col] && this.migrationResolved) return Promise.resolve();
+                return new Promise(resolve => {
+                    const t0 = Date.now();
+                    const iv = setInterval(() => {
+                        if ((this.ready[col] && this.migrationResolved) || Date.now() - t0 > t) {
+                            clearInterval(iv);
+                            resolve();
+                        }
+                    }, 200);
+                });
+            },
 
             // Debounce: one check-in triggers several DB setters in a row —
             // collapse them into a single flush so Firestore sees one small batch.
@@ -254,6 +274,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     });
                     mirror.forEach((json, key) => {
                         if (stateKeys.has(key)) return;
+                        // Data-wipe guard: until this collection's cloud state has
+                        // been applied locally, "missing from local state" means "not
+                        // loaded yet", not "deleted". Emitting deletes here would let
+                        // a fresh client (empty localStorage) erase the whole cloud
+                        // collection on its first flush.
+                        if (!self.applied.has(col)) return;
                         if (col === 'members') {
                             const rename = self.renames.find(r => r.oldId === key) || (self.renameMap && self.renameMap.has(key) ? { oldId: key, newId: self.renameMap.get(key) } : null);
                             if (rename) {
@@ -282,6 +308,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 Object.keys(ARRAY_DOCS).forEach(col => {
                     if (!self.ready[col]) return;
                     if (!isAdmin) return;
+                    if (!self.applied.has(col)) return; // data-wipe guard (same as above)
                     const cfg = ARRAY_DOCS[col];
                     const json = JSON.stringify(STATE[cfg.state] || []);
                     if (json !== self.arrayMirrors[col]) {
@@ -301,7 +328,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const allowed = ops.filter(op => isAdmin || self.kioskCanWrite(op));
                 allowed.forEach(op => flushedCols.add(op.col));
 
-                if (allowed.length === 0) return;
+                if (allowed.length === 0) { recomputeDirty(); return; }
 
                 for (let i = 0; i < allowed.length; i += 450) {
                     try {
@@ -355,6 +382,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 self.persistPending();
 
                 flushedCols.forEach(col => self.dirty.delete(col));
+                recomputeDirty();
             },
 
             // One-time migration from the legacy single document (gym/data).
@@ -425,6 +453,32 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             if (FSEngine.settingsReady && JSON.stringify(settingsPayload()) !== FSEngine.settingsMirror) FSEngine.dirty.add('settings');
         }
 
+        // After a successful commit (or a no-op flush), drop the dirty flag for
+        // collections whose local state now matches the last-known cloud state,
+        // so the next snapshot can replace instead of stacking more merge passes.
+        function recomputeDirty() {
+            Object.keys(CLOUD_COLLECTIONS).forEach(col => {
+                if (!FSEngine.dirty.has(col) || !FSEngine.ready[col]) return;
+                const cfg = CLOUD_COLLECTIONS[col];
+                const arr = STATE[cfg.state] || [];
+                const mirror = FSEngine.mirrors[col] || new Map();
+                if (arr.length !== mirror.size) return;
+                const seen = new Set();
+                for (let i = 0; i < arr.length; i++) {
+                    const key = cloudRecordKey(col, arr[i]);
+                    if (!key || seen.has(key) || !mirror.has(key) || mirror.get(key) !== JSON.stringify(arr[i])) return;
+                    seen.add(key);
+                }
+                for (const k of mirror.keys()) if (!seen.has(k)) return;
+                FSEngine.dirty.delete(col);
+            });
+            Object.keys(ARRAY_DOCS).forEach(col => {
+                if (!FSEngine.dirty.has(col)) return;
+                if (FSEngine.ready[col] && JSON.stringify(STATE[ARRAY_DOCS[col].state] || []) === FSEngine.arrayMirrors[col]) FSEngine.dirty.delete(col);
+            });
+            if (FSEngine.dirty.has('settings') && FSEngine.settingsReady && JSON.stringify(settingsPayload()) === FSEngine.settingsMirror) FSEngine.dirty.delete('settings');
+        }
+
         function saveToCloud() {
             // Always persist locally first — the app must work offline too.
             markDirtyCollections();
@@ -434,16 +488,35 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         }
 
         function applyCollectionSnapshotData(col) {
-            if (FSEngine.dirty.has(col)) return; // local changes pending — keep local state
             const cfg = CLOUD_COLLECTIONS[col];
             const docs = FSEngine.lastDocs[col] || [];
-            const arr = [];
+            const cloudArr = [];
             const seen = new Set();
             docs.forEach(rec => {
                 const key = cloudRecordKey(col, rec);
-                if (key && !seen.has(key)) { seen.add(key); arr.push(rec); }
+                if (key && !seen.has(key)) { seen.add(key); cloudArr.push(rec); }
             });
-            STATE[cfg.state] = arr;
+            // Local changes pending (dirty) BEFORE this collection's first
+            // application: merge the cloud records under the local ones — the
+            // local intent wins on key conflicts, but cloud-only records are
+            // kept, so the client isn't blinded to the cloud data for the rest
+            // of the session. After the first application, dirty means real
+            // local intent (edits/deletions) and snapshots must NOT be applied —
+            // otherwise a locally-deleted member would be resurrected by the
+            // next snapshot and the deletion would never propagate.
+            if (FSEngine.dirty.has(col) && !FSEngine.applied.has(col)) {
+                const local = STATE[cfg.state] || [];
+                const merged = local.slice();
+                cloudArr.forEach(rec => {
+                    const key = cloudRecordKey(col, rec);
+                    if (!key) return;
+                    if (!merged.some(lr => cloudRecordKey(col, lr) === key)) merged.push(rec);
+                });
+                STATE[cfg.state] = merged;
+            } else if (!FSEngine.dirty.has(col)) {
+                STATE[cfg.state] = cloudArr;
+            }
+            FSEngine.applied.add(col);
         }
 
         // Reconcile stale local data after a member id rename that happened on
@@ -528,6 +601,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 FSEngine.ready[col] = true;
                 if (FSEngine.migrationResolved && !FSEngine.dirty.has(col)) {
                     STATE[ARRAY_DOCS[col].state] = items;
+                    FSEngine.applied.add(col);
                     fallbackToLocal();
                     renderAfterCloudSync();
                 }
@@ -540,7 +614,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             FSEngine.migrationResolved = true;
             Object.keys(CLOUD_COLLECTIONS).forEach(col => applyCollectionSnapshotData(col));
             Object.keys(ARRAY_DOCS).forEach(col => {
-                if (!FSEngine.dirty.has(col)) STATE[ARRAY_DOCS[col].state] = FSEngine.arrayMirrors[col] ? JSON.parse(FSEngine.arrayMirrors[col]) : [];
+                if (!FSEngine.dirty.has(col)) { STATE[ARRAY_DOCS[col].state] = FSEngine.arrayMirrors[col] ? JSON.parse(FSEngine.arrayMirrors[col]) : []; FSEngine.applied.add(col); }
             });
             fallbackToLocal();
             renderAfterCloudSync();
