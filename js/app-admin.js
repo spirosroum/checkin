@@ -101,6 +101,8 @@ Object.assign(App, {
                             </div>
                         `;
                 }
+                const usedCells = startDayOffset + daysInMonth;
+                for(let i=usedCells; i<42; i++) { html += `<div></div>`; }
                 html += `</div>`;
                 container.innerHTML = html;
             },
@@ -331,7 +333,10 @@ Object.assign(App, {
                         <td data-label="Member Name">${nameHtml}</td>
                         <td data-label="ID">${idBadge}</td>
                         <td data-label="Status & Payment">${statusHtml}</td>
-                        <td data-label="Action" class="cell-actions"><button class="btn-outline btn-small" onclick="App.openVisitEditModal('${v.id}')">Edit</button></td>
+                        <td data-label="Action" class="cell-actions">
+                            ${v.isUnpaid && !isDeleted ? `<button class="btn-outline btn-small" onclick="App.openPaymentModal('${m.id}')">Add Payment</button>` : ''}
+                            <button class="btn-outline btn-small" onclick="App.openVisitEditModal('${v.id}')">Edit</button>
+                        </td>
                     </tr>
                 `}).join('') || '<tr><td colspan="6" class="text-center text-gray">No visits found matching filters.</td></tr>';
 

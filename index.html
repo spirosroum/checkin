@@ -1186,14 +1186,24 @@
             
             <form id="payment-form" class="flex-col gap-1 mt-2">
                 <input type="hidden" id="form-pay-id">
-                <label class="text-gray font-bold">Member *</label>
-                <select id="form-pay-member" required onchange="App.onPaymentMemberOrPlanChange()"></select>
+                <input type="hidden" id="form-pay-member">
+                <label class="text-gray font-bold">Member</label>
+                <div id="form-pay-member-wrap" style="position: relative;">
+                    <input type="text" id="form-pay-member-search" placeholder="Type to search by name or ID..." autocomplete="off" oninput="App.onPaymentMemberSearch()" onfocus="App.onPaymentMemberSearch()" onblur="setTimeout(() => document.getElementById('form-pay-member-results').classList.add('hidden'), 150)">
+                    <div id="form-pay-member-results" class="pay-member-search-results hidden"></div>
+                </div>
 
                 <!-- REQUIREMENT 1: VISIBLE & CHOOSABLE MEMBERSHIP PLAN IN ADD PAYMENT -->
                 <label class="text-gray font-bold mt-1">Select Membership Plan (Optional)</label>
-                <select id="form-pay-plan" class="mt-1" onchange="App.onPaymentPlanChange()">
-                    <option value="">-- Custom Payment / No Plan --</option>
-                </select>
+                <div class="flex gap-2 mt-1" style="flex-wrap: wrap;">
+                    <select id="form-pay-plan" style="flex:1; min-width: 200px;" onchange="App.onPaymentPlanChange()">
+                        <option value="">-- Custom Payment / No Plan --</option>
+                    </select>
+                    <div style="display:flex; align-items:center; gap:0.5rem; flex-shrink:0;">
+                        <label for="form-pay-qty" class="text-gray font-bold" style="white-space:nowrap;">Quantity</label>
+                        <input type="number" id="form-pay-qty" min="1" step="1" value="1" style="width: 84px;" onchange="App.onPaymentPlanChange()">
+                    </div>
+                </div>
                 <div id="payment-unpaid-info" class="hidden" style="margin-top: 1rem; padding: 1rem; border-left: 4px solid var(--warning); background: #fff7ed; border-radius: var(--border-radius);">
                     <strong style="display:block; margin-bottom:0.5rem;">Unpaid Trainings for selected member</strong>
                     <div id="payment-unpaid-count" class="text-gray" style="font-size: 0.95rem;"></div>

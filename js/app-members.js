@@ -213,24 +213,13 @@ Object.assign(App, {
                 
                 container.innerHTML = App.columnsConfig.map((col, idx) => `
                     <label draggable="true" ondragstart="App.dragStart(${idx})" ondragover="App.dragOver(event)" ondrop="App.drop(${idx})" ondragenter="event.preventDefault()">
-                        <button type="button" class="column-move-btn" onclick="event.preventDefault(); App.moveColumn(${idx}, -1)" aria-label="Move ${Utils.escapeHTML(col.label)} up" ${idx === 0 ? 'disabled' : ''}>↑</button>
                         <input type="checkbox" ${col.checked ? 'checked' : ''} onchange="App.toggleColumn(${idx}, this.checked)"> ${col.label}
-                        <button type="button" class="column-move-btn" onclick="event.preventDefault(); App.moveColumn(${idx}, 1)" aria-label="Move ${Utils.escapeHTML(col.label)} down" ${idx === App.columnsConfig.length - 1 ? 'disabled' : ''}>↓</button>
                     </label>
                 `).join('');
             },
 
             toggleColumn: (idx, isChecked) => {
                 App.columnsConfig[idx].checked = isChecked;
-                App.renderMemberDirectory();
-            },
-
-            moveColumn: (idx, direction) => {
-                const targetIdx = idx + direction;
-                if (targetIdx < 0 || targetIdx >= App.columnsConfig.length) return;
-                const item = App.columnsConfig.splice(idx, 1)[0];
-                App.columnsConfig.splice(targetIdx, 0, item);
-                App.renderColumnConfigurator();
                 App.renderMemberDirectory();
             },
 

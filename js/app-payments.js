@@ -13,17 +13,23 @@ Object.assign(App, {
                 const form = document.getElementById('payment-form');
                 form.reset();
                 paymentExpManualOverride = false;
-                
-                // Populate member dropdown
-                const memSelect = document.getElementById('form-pay-member');
-                const members = DB.getMembers();
-                memSelect.innerHTML = '<option value="">-- Select Member --</option>' + members.sort((a,b)=>a.firstName.localeCompare(b.firstName)).map(m => `<option value="${m.id}">${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)} (${m.id})</option>`).join('');
-                
+
+                // Reset quantity selector
+                const qtyInput = document.getElementById('form-pay-qty');
+                if (qtyInput) qtyInput.value = 1;
+
+                // Reset member search (hidden input holds the selected member ID)
+                document.getElementById('form-pay-member').value = '';
+                const memberSearch = document.getElementById('form-pay-member-search');
+                if (memberSearch) memberSearch.value = '';
+                const memberResults = document.getElementById('form-pay-member-results');
+                if (memberResults) memberResults.classList.add('hidden');
+
                 // Populate plan dropdown with price, duration days, and session counts
                 const planSelect = document.getElementById('form-pay-plan');
                 planSelect.innerHTML = '<option value="">-- Custom Payment / No Plan --</option>' + DB.getPlans().map(p => `<option value="${p.id}" data-days="${p.days || ''}" data-sessions="${p.sessions || ''}" data-price="${p.price}">${Utils.escapeHTML(p.name)} - ${DB.getCurrency()}${p.price}</option>`).join('');
 
-                if (presetMemberId) memSelect.value = presetMemberId;
+                if (presetMemberId) App.setPaymentMemberDisplay(presetMemberId);
                 
                 const today = Utils.todayLocalIso();
                 document.getElementById('form-pay-date').value = today;
@@ -36,7 +42,7 @@ Object.assign(App, {
                     const pay = DB.getPayments().find(p => p.id === paymentId);
                     if (pay) {
                         document.getElementById('form-pay-id').value = pay.id;
-                        memSelect.value = pay.memberId;
+                        App.setPaymentMemberDisplay(pay.memberId);
                         document.getElementById('form-pay-date').value = pay.date;
                         document.getElementById('form-pay-start').value = pay.appliedStartDate || pay.date;
                         document.getElementById('form-pay-amount').value = pay.amount;
@@ -56,15 +62,81 @@ Object.assign(App, {
             },
 
             /**
+             * Sets the selected member on the hidden field and mirrors the display text
+             * into the searchable input.
+             */
+            setPaymentMemberDisplay: (memberId) => {
+                const hiddenInput = document.getElementById('form-pay-member');
+                const searchInput = document.getElementById('form-pay-member-search');
+                if (hiddenInput) hiddenInput.value = memberId || '';
+                if (searchInput) {
+                    const m = DB.getMembers().find(x => x.id === memberId);
+                    searchInput.value = m ? `${m.firstName} ${m.lastName} (${m.id})` : '';
+                }
+            },
+
+            /**
+             * Live filters members by name/ID as the admin types in the searchable
+             * member field and shows a picker list of matches.
+             */
+            onPaymentMemberSearch: () => {
+                const input = document.getElementById('form-pay-member-search');
+                const results = document.getElementById('form-pay-member-results');
+                if (!input || !results) return;
+                const query = input.value.toLowerCase().trim();
+                const members = DB.getMembers();
+                let filtered = members;
+                if (query) {
+                    filtered = members.filter(m => {
+                        const fullName = `${m.firstName || ''} ${m.lastName || ''}`.toLowerCase();
+                        return (m.id || '').toLowerCase().includes(query) ||
+                            (m.firstName || '').toLowerCase().includes(query) ||
+                            (m.lastName || '').toLowerCase().includes(query) ||
+                            fullName.includes(query);
+                    });
+                }
+                filtered.sort((a, b) => a.firstName.localeCompare(b.firstName));
+                if (filtered.length === 0) {
+                    results.innerHTML = '<div class="pay-member-result text-gray" style="cursor: default;">No members found.</div>';
+                } else {
+                    results.innerHTML = filtered.slice(0, 30).map(m => `
+                        <div class="pay-member-result" onmousedown="App.selectPaymentMember('${Utils.escapeHTML(m.id)}', event)">
+                            <strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong>
+                            <span class="text-gray" style="font-size:0.8rem; flex-shrink:0;">(${Utils.escapeHTML(m.id)})</span>
+                        </div>`).join('');
+                }
+                results.classList.remove('hidden');
+            },
+
+            /**
+             * Handles picking a member from the search results. Uses onmousedown so it
+             * fires before the input's blur handler hides the picker.
+             */
+            selectPaymentMember: (memberId, e) => {
+                if (e) e.preventDefault();
+                const m = DB.getMembers().find(x => x.id === memberId);
+                if (!m) return;
+                App.setPaymentMemberDisplay(memberId);
+                const results = document.getElementById('form-pay-member-results');
+                if (results) results.classList.add('hidden');
+                App.onPaymentMemberOrPlanChange();
+            },
+
+            /**
              * Event handler triggered when a user changes the selected plan in the payment modal.
              * Automatically populates the amount input and note field with the selected plan's details.
              */
             onPaymentPlanChange: () => {
                 const planSelect = document.getElementById('form-pay-plan');
                 const selectedOption = planSelect.options[planSelect.selectedIndex];
+                const qty = parseInt(document.getElementById('form-pay-qty').value, 10) || 1;
                 if (selectedOption.value) {
-                    document.getElementById('form-pay-amount').value = selectedOption.getAttribute('data-price');
-                    document.getElementById('form-pay-note').value = 'Payment for Plan: ' + selectedOption.innerText.split('-')[0].trim();
+                    const price = parseFloat(selectedOption.getAttribute('data-price')) || 0;
+                    document.getElementById('form-pay-amount').value = (price * qty).toFixed(2);
+                    const planName = selectedOption.innerText.split('-')[0].trim();
+                    document.getElementById('form-pay-note').value = qty > 1
+                        ? `Payment for Plan: ${planName} (x${qty})`
+                        : `Payment for Plan: ${planName}`;
                 } else {
                     document.getElementById('form-pay-exp').value = '';
                 }
@@ -122,6 +194,7 @@ Object.assign(App, {
                 if (!selectedOption || !selectedOption.value) return;
 
                 const days = selectedOption.getAttribute('data-days');
+                const qty = parseInt(document.getElementById('form-pay-qty').value, 10) || 1;
                 const member = DB.getMembers().find(m => m.id === mId);
 
                 // Starting date: keep the admin's value, otherwise default to the payment
@@ -137,9 +210,11 @@ Object.assign(App, {
                 startInput.value = startVal;
 
                 // Expiration date: auto-connect from starting date + plan duration,
-                // unless the admin manually overrode the expiration.
+                // unless the admin manually overrode the expiration. The quantity
+                // selector lets the same membership be purchased multiple times, so
+                // the validity window is multiplied accordingly.
                 if (days && !paymentExpManualOverride) {
-                    expInput.value = Utils.calculateExpirationDate(startVal, days);
+                    expInput.value = Utils.calculateExpirationDate(startVal, parseInt(days, 10) * qty);
                 }
             },
  
@@ -291,6 +366,7 @@ Object.assign(App, {
                 const id = document.getElementById('form-pay-id').value || 'PAY-' + Date.now();
                 const isNew = !document.getElementById('form-pay-id').value;
                 const memberId = document.getElementById('form-pay-member').value;
+                if (!memberId) return alert('Please search and select a member.');
                 const newExp = document.getElementById('form-pay-exp').value;
                 const planSelect = document.getElementById('form-pay-plan');
                 const selectedOption = planSelect ? planSelect.options[planSelect.selectedIndex] : null;
@@ -302,13 +378,15 @@ Object.assign(App, {
                 const originalPayment = !isNew ? pays.find(p => p.id === id) : null;
 
                 // Extract session count from plan definition if applicable
+                // (multiplied by the quantity selector for multiple memberships)
                 let sessionsGranted = null;
                 if (planId) {
                     const plan = DB.getPlans().find(p => p.id === planId);
+                    const qty = parseInt(document.getElementById('form-pay-qty').value, 10) || 1;
                     if (plan && plan.sessions != null && plan.sessions !== '') {
-                        sessionsGranted = parseInt(plan.sessions, 10) || 0;
+                        sessionsGranted = (parseInt(plan.sessions, 10) || 0) * qty;
                     } else if (selectedOption && selectedOption.getAttribute('data-sessions')) {
-                        sessionsGranted = parseInt(selectedOption.getAttribute('data-sessions'), 10) || 0;
+                        sessionsGranted = (parseInt(selectedOption.getAttribute('data-sessions'), 10) || 0) * qty;
                     }
                 }
 
