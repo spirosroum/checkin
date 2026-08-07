@@ -338,7 +338,7 @@ Object.assign(App, {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `members_export_${new Date().toISOString().split('T')[0]}.csv`;
+                a.download = `members_export_${Utils.todayLocalIso()}.csv`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -406,7 +406,7 @@ Object.assign(App, {
                         document.getElementById('form-expiration').value = m.expirationDate || '';
                         document.getElementById('form-account-status').value = m.accountStatus || 'Active';
                         document.getElementById('form-notes').value = m.notes || '';
-                        document.getElementById('form-start-date').value = new Date().toISOString().split('T')[0];
+                        document.getElementById('form-start-date').value = Utils.todayLocalIso();
                         document.getElementById('btn-delete-member').classList.remove('hidden');
                         document.getElementById('admin-member-calendar-wrapper').classList.remove('hidden');
                         document.getElementById('admin-member-payments-wrapper').classList.remove('hidden');
@@ -444,7 +444,7 @@ Object.assign(App, {
                 } else {
                     document.getElementById('modal-title').innerText = 'Register New Member';
                     document.getElementById('form-member-id').value = App.generateRandomId();
-                    document.getElementById('form-start-date').value = new Date().toISOString().split('T')[0];
+                    document.getElementById('form-start-date').value = Utils.todayLocalIso();
                     document.getElementById('form-expiration').style.backgroundColor = '#fff';
                     document.getElementById('member-unpaid-warning').innerHTML = '';
                     document.getElementById('member-sessions-wrapper').style.display = 'none';
@@ -553,6 +553,15 @@ Object.assign(App, {
                 if (!originalId) { members.push(mData); isNewRegistration = true; }
                 else { const idx = members.findIndex(m => m.id === originalId); if (idx > -1) { mData.hideFromLeaderboard = !!members[idx].hideFromLeaderboard; members[idx] = mData; } }
 
+                // If the member's ID changed, rewrite class check-ins so attendance records
+                // keep following the member (visits are rewritten below by the caller paths).
+                if (originalId && originalId !== id) {
+                    const checkins = DB.getClassCheckins();
+                    let ccChanged = false;
+                    checkins.forEach(c => { if (c.memberId === originalId) { c.memberId = id; ccChanged = true; } });
+                    if (ccChanged) DB.saveClassCheckins(checkins);
+                }
+
                 // Ensure new registration accountStatus is enforced based on payment+plan
                 if (isNewRegistration) {
                     const mIdx = members.findIndex(m => m.id === id);
@@ -575,7 +584,7 @@ Object.assign(App, {
                     payments.push({
                         id: 'PAY-' + Date.now(),
                         memberId: id,
-                        date: new Date().toISOString().split('T')[0],
+                        date: Utils.todayLocalIso(),
                         amount: paymentAmt,
                         note: `System Auto-Log: Applied Plan '${plan ? plan.name : 'Unknown'}'`,
                         appliedExpiration: appliedExp,
@@ -693,7 +702,7 @@ Object.assign(App, {
                 payments.push({
                     id: 'PAY-DEBT-' + Date.now(),
                     memberId,
-                    date: new Date().toISOString().split('T')[0],
+                    date: Utils.todayLocalIso(),
                     amount: 0,
                     note: 'System Log: Debt Clearance',
                     clearedVisitIds

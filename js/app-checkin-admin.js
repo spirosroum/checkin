@@ -165,7 +165,7 @@ Object.assign(App, {
                         </div>
                     </div>`;
 
-                const todayIso = new Date().toISOString().split('T')[0];
+                const todayIso = Utils.todayLocalIso();
                 const dateInput = document.getElementById('admin-checkin-classes-date-input');
                 if (dateInput) {
                     dateInput.max = todayIso;
@@ -186,7 +186,7 @@ Object.assign(App, {
                 if (!modal || !content || !note || !App.pendingAdminCheckin) return;
 
                 const member = App.pendingAdminCheckin.member;
-                const todayIso = new Date().toISOString().split('T')[0];
+                const todayIso = Utils.todayLocalIso();
                 const selectedDateIso = dateIso || todayIso;
                 const isToday = selectedDateIso === todayIso;
 
@@ -262,7 +262,7 @@ Object.assign(App, {
 
             resetAdminCheckinClassDate: () => {
                 const dateInput = document.getElementById('admin-checkin-classes-date-input');
-                if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+                if (dateInput) dateInput.value = Utils.todayLocalIso();
                 App.renderAdminCheckinClassList(dateInput ? dateInput.value : '');
             },
 
@@ -327,7 +327,7 @@ Object.assign(App, {
                 App.autoCheckoutStaleVisits();
                 const visits = DB.getVisits();
                 const now = new Date();
-                const todayIso = now.toISOString().split('T')[0];
+                const todayIso = Utils.dateToLocalIso(now);
                 const dateInput = document.getElementById('admin-checkin-classes-date-input');
                 const selectedDateIso = dateInput && dateInput.value ? dateInput.value : todayIso;
                 const isBackdated = selectedDateIso !== todayIso;
@@ -395,8 +395,10 @@ Object.assign(App, {
                     member.sessionsLeft = (parseInt(member.sessionsLeft) || 0) - 1;
                     let allMembers = DB.getMembers();
                     let mIdx = allMembers.findIndex(mem => mem.id === member.id);
-                    allMembers[mIdx] = member;
-                    DB.saveMembers(allMembers);
+                    if (mIdx > -1) {
+                        allMembers[mIdx] = member;
+                        DB.saveMembers(allMembers);
+                    }
                 }
 
                 document.getElementById('checkin-search').value = '';

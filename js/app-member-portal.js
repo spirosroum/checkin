@@ -142,6 +142,12 @@ Object.assign(App, {
                     visits.forEach(v => { if (v.memberId === oldId) v.memberId = newId; });
                     DB.saveVisits(visits);
                     
+                    // Rewrite class check-ins too, or their attendance would be orphaned
+                    // (classCheckins are matched by memberId everywhere: kiosk, admin, leaderboard).
+                    const checkins = DB.getClassCheckins();
+                    checkins.forEach(c => { if (c.memberId === oldId) c.memberId = newId; });
+                    DB.saveClassCheckins(checkins);
+                    
                     App.currentUser = members[index];
                     localStorage.setItem('gym_member_session', newId);
                     alert("ID successfully updated!");
@@ -190,7 +196,7 @@ Object.assign(App, {
 
                 const uniqueSessionKeys = new Set();
                 filtered.forEach(ci => {
-                    const dateKey = ci.slotDate || (ci.entryTime ? ci.entryTime.split('T')[0] : '');
+                    const dateKey = ci.slotDate || (ci.entryTime ? Utils.dateToLocalIso(new Date(ci.entryTime)) : '');
                     const sessionKey = `${dateKey}|${ci.classId}|${ci.slotStart || ''}|${ci.slotEnd || ''}`;
                     uniqueSessionKeys.add(sessionKey);
                 });

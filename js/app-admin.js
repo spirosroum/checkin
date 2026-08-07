@@ -25,8 +25,8 @@ Object.assign(App, {
                 // Count only visits that belong to existing members (ignore orphan/ghost visits). A visit is "currently inside" only if exitTime===null and expectedExitTime is in the future.
                 const now = new Date();
                 const active = visits.filter(v => v.exitTime === null && v.expectedExitTime && new Date(v.expectedExitTime) > now && validMemberIds.has(v.memberId) && App.isVisitVisibleNow(v, now)).length;
-                const today = new Date().toISOString().split('T')[0];
-                const todayVisits = visits.filter(v => v.entryTime.startsWith(today) && validMemberIds.has(v.memberId)).length;
+                const today = Utils.todayLocalIso();
+                const todayVisits = visits.filter(v => v.entryTime && Utils.dateToLocalIso(new Date(v.entryTime)) === today && validMemberIds.has(v.memberId)).length;
                 const activeMem = members.filter(m => m.accountStatus === 'Active' && Utils.getDaysRemaining(m.expirationDate) >= 0).length;
 
                 const genderCounts = members.reduce((acc, m) => { const g = m.gender || 'Unspecified'; acc[g] = (acc[g] || 0) + 1; return acc; }, {});
@@ -47,7 +47,7 @@ Object.assign(App, {
 
                 // Sync supporting UI: Today button + export section month label
                 const todayBtn = document.getElementById('analytical-month-today');
-                if (todayBtn) todayBtn.classList.toggle('hidden', monthStr === new Date().toISOString().slice(0, 7));
+                if (todayBtn) todayBtn.classList.toggle('hidden', monthStr === Utils.currentMonthLocal());
                 const exportLabel = document.getElementById('export-month-label');
                 if (exportLabel) {
                     exportLabel.innerText = monthStr
@@ -126,7 +126,7 @@ Object.assign(App, {
             goToCurrentMonth: () => {
                 const input = document.getElementById('export-month-picker');
                 if (!input) return;
-                input.value = new Date().toISOString().slice(0, 7);
+                input.value = Utils.currentMonthLocal();
                 App.renderAnalyticalCalendar();
             },
 
@@ -148,10 +148,11 @@ Object.assign(App, {
 
                 let hasData = false;
                 visits.forEach(v => {
-                    if (v.entryTime.startsWith(monthStr)) {
+                    const visitLocalDate = v.entryTime ? Utils.dateToLocalIso(new Date(v.entryTime)) : '';
+                    if (visitLocalDate.startsWith(monthStr)) {
                         const m = memMap.get(v.memberId);
                         if (m) {
-                            const date = v.entryTime.split('T')[0];
+                            const date = visitLocalDate;
                             const time = new Date(v.entryTime).toLocaleTimeString();
                             const status = v.isUnpaid ? 'Unpaid/Expired' : 'Paid';
                             csvContent += `${date},${time},${m.id},${m.firstName},${m.lastName},${m.belt},${status}\n`;
@@ -335,10 +336,10 @@ Object.assign(App, {
                 document.getElementById('form-visit-id').value = visit.id;
                 
                 const entryInput = document.getElementById('form-visit-entry');
-                entryInput.value = visit.entryTime ? new Date(visit.entryTime).toISOString().slice(0,16) : '';
+                entryInput.value = Utils.toLocalDatetimeInput(visit.entryTime);
                 
                 const exitInput = document.getElementById('form-visit-exit');
-                exitInput.value = visit.exitTime ? new Date(visit.exitTime).toISOString().slice(0,16) : '';
+                exitInput.value = Utils.toLocalDatetimeInput(visit.exitTime);
 
                 App.openModal('modal-visit');
             },

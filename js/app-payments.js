@@ -25,7 +25,7 @@ Object.assign(App, {
 
                 if (presetMemberId) memSelect.value = presetMemberId;
                 
-                const today = new Date().toISOString().split('T')[0];
+                const today = Utils.todayLocalIso();
                 document.getElementById('form-pay-date').value = today;
                 document.getElementById('form-pay-start').value = today;
                 document.getElementById('btn-delete-payment').classList.add('hidden');

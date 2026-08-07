@@ -147,17 +147,6 @@ Object.assign(App, {
                 App.showMobileCheckinLanding();
             },
 
-            showMobileCheckinView: () => {
-                const remembered = App.getMobileSessionMember();
-                if (remembered) {
-                    // Land on the check-in portal with the class chooser ready to go.
-                    App.showKioskCheckinPortal();
-                    App.beginMobileCheckin(remembered);
-                    return;
-                }
-                App.showMobileCheckinLanding();
-            },
-
             mobileCheckinSubmit: () => {
                 const input = document.getElementById('mobile-checkin-id');
                 if (!input) return;

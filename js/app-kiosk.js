@@ -44,7 +44,7 @@ Object.assign(App, {
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
                 const scheduleDate = App.getWeekdayDateForCurrentWeek(slotDay);
-                const scheduleDateStr = scheduleDate ? scheduleDate.toISOString().split('T')[0] : null;
+                const scheduleDateStr = scheduleDate ? Utils.dateToLocalIso(scheduleDate) : null;
                 const displayDate = scheduleDateStr ? Utils.formatDateLocalized(scheduleDateStr, lang) : null;
                 const activeMembers = DB.getMembers();
                 const activeMemberIds = new Set(activeMembers.map(m => m.id));
@@ -54,7 +54,7 @@ Object.assign(App, {
                     if (!activeMemberIds.has(checkin.memberId)) return false;
                     if (!scheduleDateStr) return true;
 
-                    const checkinDate = checkin.slotDate || (checkin.entryTime ? checkin.entryTime.split('T')[0] : null);
+                    const checkinDate = checkin.slotDate || (checkin.entryTime ? Utils.dateToLocalIso(new Date(checkin.entryTime)) : null);
                     if (checkinDate !== scheduleDateStr) return false;
 
                     if (slotStart && slotEnd) {
@@ -202,7 +202,7 @@ Object.assign(App, {
    
                 const member = App.pendingCheckinMember.member;
                 const todayDate = new Date();
-                const todayIso = todayDate.toISOString().split('T')[0];
+                const todayIso = Utils.dateToLocalIso(todayDate);
                 const todayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][todayDate.getDay()];
                 const schedules = (DB.getSchedules() || []).filter(cls => cls.isPublic !== false);
                 const todaySlotEntries = [];

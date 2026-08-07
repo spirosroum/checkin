@@ -284,7 +284,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 };
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                 const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                a.download = `GymDesk_Backup_${new Date().toISOString().split('T')[0]}.json`; a.click();
+                a.download = `GymDesk_Backup_${Utils.todayLocalIso()}.json`; a.click();
             },
 
             importData: () => {
@@ -329,6 +329,29 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
         const Utils = {
             formatDate: (dateStr) => { if (!dateStr) return 'N/A'; return new Date(dateStr).toLocaleDateString(); },
+            // Local-date helpers: "today" and date-to-YYYY-MM-DD conversions.
+            // toISOString() returns the UTC date, which shifts the day for users in
+            // positive/negative offsets (e.g. Greece is UTC+2/+3), so all date
+            // keys, comparisons and inputs must use the local calendar date.
+            dateToLocalIso: (date) => {
+                if (!date) return '';
+                const d = date instanceof Date ? date : new Date(date);
+                if (isNaN(d.getTime())) return '';
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            },
+            todayLocalIso: () => Utils.dateToLocalIso(new Date()),
+            currentMonthLocal: () => {
+                const d = new Date();
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            },
+            // Local 'YYYY-MM-DDTHH:MM' value for <input type="datetime-local">,
+            // which expects wall-clock time, not UTC.
+            toLocalDatetimeInput: (iso) => {
+                if (!iso) return '';
+                const d = new Date(iso);
+                if (isNaN(d.getTime())) return '';
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            },
             formatDateLocalized: (dateStr, lang = 'en') => {
                 if (!dateStr) return 'N/A';
                 try {
@@ -766,7 +789,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 App.renderColorPaletteUI && App.renderColorPaletteUI();
                 App.renderColumnConfigurator && App.renderColumnConfigurator();
                 const monthInput = document.getElementById('export-month-picker');
-                if (monthInput && !monthInput.value) monthInput.value = new Date().toISOString().slice(0, 7);
+                if (monthInput && !monthInput.value) monthInput.value = Utils.currentMonthLocal();
                 // Steal focus only when no member/mobile session is active.
                 const memberVisible = document.getElementById('view-member') && !document.getElementById('view-member').classList.contains('hidden');
                 const mobileVisible = document.getElementById('view-mobile-checkin') && !document.getElementById('view-mobile-checkin').classList.contains('hidden');
@@ -784,7 +807,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 App.cleanBin(); 
                 App.updateUICurrency();
  
-                document.getElementById('member-login-id').addEventListener('keyup', (e) => { if (e.key === 'Enter') App.loginAsMember(); });
+                // Member login Enter is handled by the inline onkeyup on #member-login-id in index.html.
+                // (A second listener here caused loginAsMember to run twice per Enter press.)
                 // Admin-view listeners (forms/search inside #view-admin) are bound here
                 // and re-bound after each unlock (see bindAdminListeners).
                 App.bindAdminListeners();
@@ -792,7 +816,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 document.getElementById('kiosk-title-display').innerText = DB.getPortalName();
  
                 // Setup export month default picker
-                const nowYm = new Date().toISOString().slice(0, 7);
+                const nowYm = Utils.currentMonthLocal();
                 document.getElementById('export-month-picker').value = nowYm;
  
                 App.renderColorPaletteUI();
