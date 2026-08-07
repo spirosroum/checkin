@@ -48,6 +48,8 @@
         .btn-danger { background: var(--danger); color: var(--white); }
         .btn-warning { background: var(--warning); color: var(--white); }
         .btn-outline { background: transparent; border: 1px solid var(--gray); color: var(--dark); }
+        .admin-toggle-link { background: transparent; border: none; padding: 0.25rem 0.5rem; color: var(--gray); font-size: 0.8rem; font-weight: 500; text-decoration: underline; opacity: 0.75; }
+        .admin-toggle-link:hover { color: var(--dark); opacity: 1; background: transparent; transform: none; box-shadow: none; }
         .btn-outline:hover { background: var(--gray-light); }
         .btn-primary:hover, .btn-success:hover, .btn-danger:hover, .btn-warning:hover, .btn-outline:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
         .btn-success:hover, .btn-danger:hover, .btn-warning:hover { filter: brightness(1.1); }

@@ -219,6 +219,21 @@ Object.assign(App, {
                 }
             },
 
+            toggleAdminSection: () => {
+                const section = document.getElementById('admin-section');
+                const toggle = document.getElementById('admin-section-toggle');
+                const chevron = document.getElementById('admin-section-chevron');
+                if (!section) return;
+                const expanding = section.classList.contains('hidden');
+                section.classList.toggle('hidden');
+                if (toggle) toggle.setAttribute('aria-expanded', String(expanding));
+                if (chevron) chevron.textContent = expanding ? '▴' : '▾';
+                if (expanding) {
+                    const email = document.getElementById('admin-login-email');
+                    if (email) email.focus();
+                }
+            },
+
             openModal: (id) => {
                 const modal = document.getElementById(id);
                 if (!modal) return;
@@ -246,6 +261,8 @@ Object.assign(App, {
                 if(id === 'modal-login') {
                     document.getElementById('admin-login-pwd').value = '';
                     document.getElementById('admin-login-email').value = '';
+                    const adminSection = document.getElementById('admin-section');
+                    if (adminSection && !adminSection.classList.contains('hidden')) App.toggleAdminSection();
                 }
                 const anyModalOpen = Array.from(document.querySelectorAll('.modal-overlay')).some(m => !m.classList.contains('hidden'));
                 if (!anyModalOpen) document.body.style.overflow = '';
