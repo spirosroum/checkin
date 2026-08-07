@@ -95,6 +95,15 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isKiosk() && resource.data.id != docId);
     }
 
+    match /memberRenames/{docId} {
+      allow read: if true;
+      // Kiosk self-service ID changes publish oldId -> newId here so every
+      // client can reconcile stale local copies (instead of resurrecting the
+      // old member doc). Only the owning oldId may be written by a kiosk.
+      allow create, update: if isAdmin() || (isKiosk() && request.resource.data.oldId == docId && request.resource.data.newId is string && request.resource.data.newId.size() > 0);
+      allow delete: if isAdmin();
+    }
+
     match /visits/{docId} {
       allow read: if true;
       allow create: if true;

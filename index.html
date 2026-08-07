@@ -891,6 +891,11 @@
                             <input type="file" id="import-file" accept=".json" style="margin-bottom: 0.5rem; padding: 0.4rem;">
                             <button class="btn-danger btn-small" onclick="DB.importData()">Restore Backup</button>
                         </div>
+                        <div style="flex:1; min-width: 200px;">
+                            <strong>Duplicate Members</strong>
+                            <p class="text-gray mb-1 mt-1">Find members duplicated by an ID change and merge them.</p>
+                            <button class="btn-primary btn-small" onclick="App.repairDuplicateMembers()">Repair Duplicates</button>
+                        </div>
                     </div>
                 </div>
             </div>

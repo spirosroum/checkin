@@ -1,6 +1,6 @@
 // =====================================================================
 // app-admin.js
-// App methods: sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, getVisitPaidByInfo, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility
+// App methods: sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, getVisitPaidByInfo, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility, repairDuplicateMembers
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -435,6 +435,58 @@ Object.assign(App, {
                 DB.setHiddenBelts(hidden);
                 alert("Belt visibility saved. Kiosk view updated.");
                 App.renderLivePresent();
+            },
+
+            // One-time repair for members that were duplicated by an ID change:
+            // groups records by email (or name when no email), keeps the record
+            // with the most check-in history, and rewrites every visit / class
+            // check-in / payment / notification reference onto the keeper.
+            repairDuplicateMembers: () => {
+                if (!App.isAdminAuthed()) return alert('Only the admin can repair duplicate members.');
+                const members = DB.getMembers();
+                const groups = new Map();
+                members.forEach(m => {
+                    if (!m || !m.id) return;
+                    const emailKey = (m.email || '').trim().toLowerCase();
+                    const nameKey = `${(m.firstName || '').trim()}|${(m.lastName || '').trim()}`.toLowerCase();
+                    const key = emailKey || nameKey;
+                    if (!key) return;
+                    if (!groups.has(key)) groups.set(key, []);
+                    groups.get(key).push(m);
+                });
+                const dupGroups = [...groups.values()].filter(g => g.length > 1);
+                if (!dupGroups.length) return alert('No duplicate members found.');
+                const summary = dupGroups.map(g => g.map(m => `${m.firstName || '?'} ${m.lastName || ''} (${m.id})`).join('  ↔  ')).join('\n');
+                if (!confirm(`Found ${dupGroups.length} duplicate group(s):\n\n${summary}\n\nEach group keeps the record with the most check-in history; the rest are merged into it and removed. Continue?`)) return;
+
+                const visits = DB.getVisits();
+                const checkins = DB.getClassCheckins();
+                const payments = DB.getPayments();
+                const notifs = DB.getNotifications();
+                const keepIds = new Set();
+                let mergedCount = 0;
+                dupGroups.forEach(group => {
+                    const score = m => App.getMemberTrainingCount(m.id) * 10 + visits.filter(v => v.memberId === m.id).length;
+                    let keep = group[0];
+                    group.forEach(m => { if (score(m) > score(keep)) keep = m; });
+                    keepIds.add(keep.id);
+                    group.forEach(m => {
+                        if (m.id === keep.id) return;
+                        mergedCount++;
+                        visits.forEach(v => { if (v.memberId === m.id) v.memberId = keep.id; });
+                        checkins.forEach(c => { if (c.memberId === m.id) c.memberId = keep.id; });
+                        payments.forEach(p => { if (p.memberId === m.id) p.memberId = keep.id; });
+                        notifs.forEach(n => { if (n.memberId === m.id) n.memberId = keep.id; });
+                        if (!keep.email && m.email) keep.email = m.email;
+                    });
+                });
+                DB.saveMembers(members.filter(m => keepIds.has(m.id)));
+                DB.saveVisits(visits);
+                DB.saveClassCheckins(checkins);
+                DB.savePayments(payments);
+                DB.saveNotifications(notifs);
+                App.renderMemberDirectory();
+                alert(`Merged ${mergedCount} duplicate record(s) into ${dupGroups.length} keeper(s). Check the member directory and verify.`);
             },
 
 });

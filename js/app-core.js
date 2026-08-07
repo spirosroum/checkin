@@ -120,6 +120,15 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             try { return CLOUD_COLLECTIONS[col].key(rec) || ''; } catch (e) { return ''; }
         }
 
+        // Resolve a member id that was renamed (via the cloud ledger, or a local
+        // pending rename) to its successor id, or null when not renamed.
+        function resolveRenameTarget(id) {
+            if (!id) return null;
+            if (FSEngine.renameMap && FSEngine.renameMap.has(id)) return FSEngine.renameMap.get(id);
+            const r = (FSEngine.renames || []).find(x => x.oldId === id);
+            return r ? r.newId : null;
+        }
+
         function settingsPayload() {
             return {
                 portalName: STATE.portalName || '🥋 BJJ Kiosk Portal',
@@ -139,8 +148,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             settingsReady: false,
             settingsMirror: '',
             dirty: new Set(),     // collections with local changes not yet flushed
-            renames: [],          // member id renames {oldId, newId} awaiting the delete pass
-            deferredDeletes: [],  // member rename deletes to run after the id update lands
+            // Member id renames {oldId, newId} awaiting the delete pass. Persisted
+            // so a tab close / crash between "create new doc" and "delete old doc"
+            // does not orphan the old doc (which would duplicate the member).
+            renames: (() => { try { return JSON.parse(localStorage.getItem('gym_fs_renames') || '[]'); } catch (e) { return []; } })(),
+            deferredDeletes: (() => { try { return JSON.parse(localStorage.getItem('gym_fs_deferred') || '[]'); } catch (e) { return []; } })(),
+            renameMap: new Map(), // oldId -> newId from the cloud rename ledger
             flushTimer: null,
             flushPromise: null,
             _resolveFlush: null,
@@ -148,9 +161,16 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             migrationResolved: false,
             migratePoll: null,
 
+            persistPending: function () {
+                try {
+                    localStorage.setItem('gym_fs_renames', JSON.stringify(this.renames));
+                    localStorage.setItem('gym_fs_deferred', JSON.stringify(this.deferredDeletes));
+                } catch (e) {}
+            },
+
             isAdminClient: () => { try { return !!App.isAdminAuthed && App.isAdminAuthed(); } catch (e) { return false; } },
 
-            notifyRename: function (oldId, newId) { this.renames.push({ oldId, newId }); },
+            notifyRename: function (oldId, newId) { this.renames.push({ oldId, newId }); this.persistPending(); },
 
             // Debounce: one check-in triggers several DB setters in a row —
             // collapse them into a single flush so Firestore sees one small batch.
@@ -181,9 +201,21 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             // left for the admin client to perform later (rules deny them for kiosk).
             kioskCanWrite: function (op) {
                 if (op.type === 'set' || op.type === 'update') {
-                    return op.col === 'members' || op.col === 'visits' || op.col === 'classCheckins' || op.col === 'notifications';
+                    return op.col === 'members' || op.col === 'visits' || op.col === 'classCheckins' || op.col === 'notifications' || op.col === 'memberRenames';
                 }
-                if (op.type === 'delete') return !!op.kioskAllowed; // member rename deletes only
+                if (op.type === 'delete') {
+                    if (op.kioskAllowed) return true; // member rename deletes only
+                    // A member doc whose id field no longer matches its docId is a
+                    // rename straggler — safe for kiosk cleanup (rules also enforce
+                    // id != docId before allowing an anonymous delete).
+                    if (op.col === 'members') {
+                        const m = this.mirrors[op.col];
+                        if (m && m.has(op.key)) {
+                            try { const rec = JSON.parse(m.get(op.key)); return rec.id !== op.key; } catch (e) { return false; }
+                        }
+                    }
+                    return false;
+                }
                 return false;
             },
             diffAndWrite: async function () {
@@ -205,16 +237,25 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         const key = cloudRecordKey(col, rec);
                         if (!key) return;
                         stateKeys.add(key);
-                        const json = JSON.stringify(rec);
+                        // If this record references a member that was renamed,
+                        // translate the reference so stale offline data (visits,
+                        // class check-ins, payments, notifications) follows the
+                        // member instead of re-creating the old id anywhere.
+                        let writeRec = rec;
+                        if (rec.memberId && (col === 'visits' || col === 'classCheckins' || col === 'notifications' || col === 'payments')) {
+                            const t = resolveRenameTarget(rec.memberId);
+                            if (t && t !== rec.memberId) writeRec = Object.assign({}, rec, { memberId: t });
+                        }
+                        const json = JSON.stringify(writeRec);
                         if (mirror.get(key) !== json) {
-                            ops.push({ col, key, type: 'set', data: rec });
+                            ops.push({ col, key, type: 'set', data: writeRec });
                             mirrorUpdates.push({ col, key, action: 'set', json });
                         }
                     });
                     mirror.forEach((json, key) => {
                         if (stateKeys.has(key)) return;
                         if (col === 'members') {
-                            const rename = self.renames.find(r => r.oldId === key);
+                            const rename = self.renames.find(r => r.oldId === key) || (self.renameMap && self.renameMap.has(key) ? { oldId: key, newId: self.renameMap.get(key) } : null);
                             if (rename) {
                                 // Update the old doc's id field first; its delete is
                                 // deferred until the update lands (kiosk deletes are
@@ -229,7 +270,14 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         mirrorUpdates.push({ col, key, action: 'delete' });
                     });
                 });
-                self.renames = [];
+
+                // Publish pending renames to the cloud ledger so every client can
+                // reconcile stale local copies instead of resurrecting the old doc.
+                if (self.renames.length) {
+                    self.renames.forEach(r => {
+                        ops.push({ col: 'memberRenames', key: r.oldId, type: 'set', data: { oldId: r.oldId, newId: r.newId, at: new Date().toISOString(), by: isAdmin ? 'admin' : 'kiosk' } });
+                    });
+                }
 
                 Object.keys(ARRAY_DOCS).forEach(col => {
                     if (!self.ready[col]) return;
@@ -297,6 +345,14 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         self.deferredDeletes = next.concat(self.deferredDeletes);
                     }
                 }
+                // The main batch landed (new doc, old-doc id update, ledger op).
+                // Keep pending renames only for stragglers still present in the
+                // mirror — the rest are done and can be dropped. If the members
+                // collection is not ready yet, the cloud ledger already carries
+                // the rename, so other clients (and this one after a reload)
+                // will reconcile via renameMap.
+                self.renames = self.renames.filter(r => self.mirrors.members && self.mirrors.members.has(r.oldId));
+                self.persistPending();
 
                 flushedCols.forEach(col => self.dirty.delete(col));
             },
@@ -390,15 +446,77 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             STATE[cfg.state] = arr;
         }
 
+        // Reconcile stale local data after a member id rename that happened on
+        // another device (learned from the cloud memberRenames ledger). Without
+        // this, a client that was offline (or dirty) during the rename would
+        // flush its stale member record back to Firestore and resurrect the old
+        // doc — producing a duplicate member.
+        function applyRenameLedger() {
+            const map = FSEngine.renameMap;
+            if (!map || !map.size) return;
+            let touched = false;
+
+            // 1) Translate references to the renamed member in local visits,
+            //    class check-ins, payments and notifications.
+            [STATE.visits, STATE.classCheckins, STATE.payments, STATE.notifications].forEach(arr => {
+                if (!Array.isArray(arr)) return;
+                arr.forEach(r => { if (r && r.memberId && map.has(r.memberId)) { r.memberId = map.get(r.memberId); touched = true; } });
+            });
+
+            // 2) Replace any locally-kept record of the renamed member with the
+            //    cloud successor doc, carrying forward a lower sessionsLeft (an
+            //    offline check-in decrement must not be lost).
+            const cloudById = new Map();
+            (FSEngine.lastDocs.members || []).forEach(d => { if (d && d.id) cloudById.set(d.id, d); });
+            const keep = [];
+            const seen = new Set();
+            let replaced = false;
+            (STATE.members || []).forEach(m => {
+                if (!m || !m.id) return;
+                if (map.has(m.id)) {
+                    const succ = cloudById.get(map.get(m.id));
+                    if (!succ) return; // successor not synced yet — drop the stale record
+                    const merged = Object.assign({}, succ);
+                    if (typeof m.sessionsLeft !== 'undefined' && parseInt(m.sessionsLeft) < parseInt(succ.sessionsLeft || 0)) merged.sessionsLeft = m.sessionsLeft;
+                    if (!seen.has(succ.id)) { seen.add(succ.id); keep.push(merged); }
+                    replaced = true;
+                    return;
+                }
+                if (!seen.has(m.id)) { seen.add(m.id); keep.push(m); }
+            });
+            if (replaced) { STATE.members = keep; touched = true; }
+
+            if (touched) {
+                FSEngine.dirty.add('members');
+                FSEngine.dirty.add('visits');
+                FSEngine.dirty.add('classCheckins');
+                FSEngine.dirty.add('payments');
+                FSEngine.dirty.add('notifications');
+                fallbackToLocal();
+                renderAfterCloudSync();
+            }
+        }
+
         function handleCollectionSnapshot(col) {
             return (snapshot) => {
                 const mirror = new Map();
                 const docs = [];
-                snapshot.forEach(d => { const rec = d.data(); if (rec && typeof rec === 'object') { docs.push(rec); mirror.set(d.id, JSON.stringify(rec)); } });
+                snapshot.forEach(d => {
+                    const rec = d.data();
+                    if (!rec || typeof rec !== 'object') return;
+                    mirror.set(d.id, JSON.stringify(rec));
+                    // A member doc whose id field no longer matches its docId is a
+                    // rename straggler: keep it in the mirror so a flush can delete
+                    // it, but never apply it to the local state (it would duplicate
+                    // the member or silently revert its data).
+                    if (col === 'members' && rec.id != null && rec.id !== d.id) return;
+                    docs.push(rec);
+                });
                 FSEngine.mirrors[col] = mirror;
                 FSEngine.lastDocs[col] = docs;
                 FSEngine.ready[col] = true;
                 if (FSEngine.migrationResolved) { applyCollectionSnapshotData(col); fallbackToLocal(); renderAfterCloudSync(); }
+                if (FSEngine.migrationResolved && col === 'members') applyRenameLedger();
                 if (FSEngine.dirty.has(col)) FSEngine.scheduleFlush();
             };
         }
@@ -426,6 +544,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             });
             fallbackToLocal();
             renderAfterCloudSync();
+            applyRenameLedger();
             FSEngine.scheduleFlush();
         }
 
@@ -473,6 +592,15 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 Object.keys(CLOUD_COLLECTIONS).forEach(col => {
                     db.collection(col).onSnapshot(handleCollectionSnapshot(col), err => console.error('Firestore listener error (' + col + '):', err));
                 });
+                // Rename ledger: oldId -> newId for every self-service ID change.
+                // Kept separate from CLOUD_COLLECTIONS because it is a key-value
+                // map, not an array collection.
+                db.collection('memberRenames').onSnapshot(snapshot => {
+                    const map = new Map();
+                    snapshot.forEach(d => { const rec = d.data(); if (rec && rec.oldId && rec.newId) map.set(rec.oldId, rec.newId); });
+                    FSEngine.renameMap = map;
+                    if (FSEngine.migrationResolved) { applyRenameLedger(); renderAfterCloudSync(); }
+                }, err => console.error('Firestore listener error (memberRenames):', err));
                 Object.keys(ARRAY_DOCS).forEach(col => {
                     db.collection(col).doc('global').onSnapshot(handleArrayDocSnapshot(col), err => console.error('Firestore listener error (' + col + '):', err));
                 });
