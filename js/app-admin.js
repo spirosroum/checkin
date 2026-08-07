@@ -44,6 +44,17 @@ Object.assign(App, {
 
             renderAnalyticalCalendar: () => {
                 const monthStr = document.getElementById('export-month-picker').value; // 'YYYY-MM'
+
+                // Sync supporting UI: Today button + export section month label
+                const todayBtn = document.getElementById('analytical-month-today');
+                if (todayBtn) todayBtn.classList.toggle('hidden', monthStr === new Date().toISOString().slice(0, 7));
+                const exportLabel = document.getElementById('export-month-label');
+                if (exportLabel) {
+                    exportLabel.innerText = monthStr
+                        ? new Date(Number(monthStr.split('-')[0]), Number(monthStr.split('-')[1]) - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+                        : 'this month';
+                }
+
                 if(!monthStr) return;
                 
                 const [year, month] = monthStr.split('-').map(Number);
@@ -101,6 +112,26 @@ Object.assign(App, {
                 document.getElementById('filter-visit-status').value = 'all';
                 document.getElementById('filter-visit-sort').value = 'newest';
                 App.renderVisitLog();
+            },
+
+            changeAnalyticalMonth: (delta) => {
+                const input = document.getElementById('export-month-picker');
+                if (!input || !input.value) return;
+                const [year, month] = input.value.split('-').map(Number);
+                const d = new Date(year, month - 1 + delta, 1);
+                input.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                App.renderAnalyticalCalendar();
+            },
+
+            goToCurrentMonth: () => {
+                const input = document.getElementById('export-month-picker');
+                if (!input) return;
+                input.value = new Date().toISOString().slice(0, 7);
+                App.renderAnalyticalCalendar();
+            },
+
+            onAnalyticalMonthChange: () => {
+                App.renderAnalyticalCalendar();
             },
 
             exportMonthlyExcel: () => {

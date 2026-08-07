@@ -96,6 +96,12 @@
         .btn-small { padding: 0.4rem 0.8rem; font-size: 0.85rem; }
         .btn-large { padding: 1rem 2rem; font-size: 1.1rem; width: 100%; }
         
+        /* Calendar month navigation (dashboard check-in calendar) */
+        .month-nav { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; padding: 0.4rem 0.5rem; font-size: 1.1rem; line-height: 1; }
+        .month-picker { max-width: 190px; min-height: 36px; padding: 0.35rem 0.6rem; text-align: center; font-weight: 600; }
+        .export-section { border-top: 1px solid var(--gray-light); padding-top: 1rem; }
+        @media (max-width: 480px) { .calendar-month-nav { width: 100%; justify-content: space-between; } .month-picker { flex: 1; max-width: none; } }
+        
         input, select, textarea { width: 100%; padding: 0.75rem; border: 1px solid var(--gray-light); border-radius: var(--border-radius); font-size: 0.95rem; outline: none; background: var(--white); transition: border 0.2s; }
         input[type="time"], input[type="date"], input[type="datetime-local"], input[type="month"] { font-family: monospace; font-size: 1rem; cursor: pointer; }
         input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }

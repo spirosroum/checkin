@@ -326,12 +326,23 @@
                                 <h3>Check-in Activity Calendar</h3>
                                 <p class="text-gray">Monthly analytical view of gym check-ins for real members. Click on a day to view details.</p>
                             </div>
-                            <div class="flex gap-2 align-center">
-                                <input type="month" id="export-month-picker" style="max-width: 180px;">
-                                <button class="btn-success btn-small" onclick="App.exportMonthlyExcel()">📊 Export Monthly Excel</button>
+                            <div class="flex gap-1 align-center calendar-month-nav">
+                                <button class="btn-outline btn-small month-nav" onclick="App.changeAnalyticalMonth(-1)" title="Previous month" aria-label="Previous month">‹</button>
+                                <input type="month" id="export-month-picker" class="month-picker" onchange="App.onAnalyticalMonthChange()">
+                                <button class="btn-outline btn-small month-nav" onclick="App.changeAnalyticalMonth(1)" title="Next month" aria-label="Next month">›</button>
+                                <button id="analytical-month-today" class="btn-outline btn-small" onclick="App.goToCurrentMonth()">Today</button>
                             </div>
                         </div>
                         <div id="analytical-calendar-container" class="mt-2"></div>
+
+                        <!-- Export Monthly Excel -->
+                        <div class="flex justify-between align-center mt-2 export-section" style="flex-wrap: wrap; gap: 1rem;">
+                            <div>
+                                <h3 style="margin-bottom: 0.25rem;">📊 Export Monthly Excel</h3>
+                                <p class="text-gray">Download all check-ins for <strong id="export-month-label">this month</strong> as a CSV file, ready to open in Excel.</p>
+                            </div>
+                            <button class="btn-success btn-small" onclick="App.exportMonthlyExcel()">Download CSV</button>
+                        </div>
                     </div>
                 </div>
 
