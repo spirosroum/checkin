@@ -264,10 +264,22 @@ Object.assign(App, {
             // every visit is covered by other means.
             computeMemberFirstUnpaidDay: (member, payments, visits) => {
                 const explicitIds = new Set();
-                payments.forEach(p => { if (Array.isArray(p.clearedVisitIds)) p.clearedVisitIds.forEach(id => explicitIds.add(id)); });
+                payments.forEach(p => {
+                    if (Array.isArray(p.clearedVisitIds)) {
+                        // Mirror the reconciliation rule: session-granting payments never
+                        // clear visits explicitly.
+                        const grantsSessions = p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0;
+                        if (grantsSessions) return;
+                        p.clearedVisitIds.forEach(id => explicitIds.add(id));
+                    }
+                });
                 const timeWindows = [];
                 payments.forEach(p => {
                     if (p.appliedExpiration) {
+                        // Mirror the reconciliation rule: session-granting payments are
+                        // quota-based and never create time-coverage windows.
+                        const grantsSessions = p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0;
+                        if (grantsSessions) return;
                         const start = new Date(p.appliedStartDate || p.date);
                         const end = new Date(p.appliedExpiration);
                         if (!isNaN(start.getTime()) && !isNaN(end.getTime())) timeWindows.push({ start, end });
@@ -299,10 +311,17 @@ Object.assign(App, {
                 const members = DB.getMembers();
                 const member = members.find(m => m.id === memberId);
 
-                // Step 1: Gather explicitly cleared visit IDs from remaining active payments
+                // Step 1: Gather explicitly cleared visit IDs from remaining active payments.
+                // Legacy-data heal: clearedVisitIds recorded on SESSION-GRANTING payments are
+                // ignored — older versions cleared unpaid visits there without consuming the
+                // purchased sessions. Those visits must be re-evaluated against the session
+                // quota (and the balance recomputed) so the errors self-heal. Time-based and
+                // generic debt payments keep their explicit clearance.
                 const explicitPaidVisitIds = new Set();
                 payments.forEach(payment => {
                     if (Array.isArray(payment.clearedVisitIds)) {
+                        const grantsSessions = payment.sessionsGranted && parseInt(payment.sessionsGranted, 10) > 0;
+                        if (grantsSessions) return;
                         payment.clearedVisitIds.forEach(id => explicitPaidVisitIds.add(id));
                     }
                 });
@@ -310,9 +329,16 @@ Object.assign(App, {
                 // Step 2: Gather date coverage windows from remaining active payments.
                 // A payment's own window starts at its appliedStartDate (or payment date) —
                 // never at the epoch — so it can't retroactively cover visits that predate it.
+                // Session-granting payments are quota-based and must NOT create windows: their
+                // validity days would time-cover outstanding unpaid check-ins (e.g. a window
+                // anchored to the first unpaid day) and pay off the debt WITHOUT consuming the
+                // purchased sessions (an 8-session membership must consume its quota, leaving
+                // 8 - debt instead of 8 with the debt marked paid).
                 const timeWindows = [];
                 payments.forEach(payment => {
                     if (payment.appliedExpiration) {
+                        const grantsSessions = payment.sessionsGranted && parseInt(payment.sessionsGranted, 10) > 0;
+                        if (grantsSessions) return;
                         const startStr = payment.appliedStartDate || payment.date;
                         if (!startStr) return;
                         const start = new Date(startStr);
@@ -414,8 +440,46 @@ Object.assign(App, {
                     }
                 }
 
+                // Legacy-data heal: planDays was never written by older builds, so derive it
+                // from the latest time-based-only payment (appliedExpiration without sessions).
+                // This makes mixed legacy members (sessions + monthly) behave correctly: their
+                // banked sessions are no longer consumed during the active membership period.
+                let memberHealed = false;
+                if (member && member.planDays == null) {
+                    const timePays = payments
+                        .filter(p => p.appliedExpiration && !(p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0))
+                        .sort((a, b) => new Date(b.date) - new Date(a.date));
+                    const latestTimePay = timePays[0];
+                    if (latestTimePay) {
+                        const tp = latestTimePay.planId ? DB.getPlans().find(pl => pl.id === latestTimePay.planId) : null;
+                        let days = null;
+                        if (tp && tp.days != null && tp.days !== '') days = parseInt(tp.days, 10);
+                        if (days == null) {
+                            const s = new Date(latestTimePay.appliedStartDate || latestTimePay.date);
+                            const e = new Date(latestTimePay.appliedExpiration);
+                            if (!isNaN(s.getTime()) && !isNaN(e.getTime())) days = Math.max(1, Math.round((e - s) / 86400000));
+                        }
+                        if (days != null) {
+                            member.planDays = days;
+                            memberHealed = true;
+                        }
+                    }
+                }
+
+                // Legacy-data heal: members wrongly left Active with zero usable coverage
+                // (activated by a generic payment, or by a session bundle consumed by debt)
+                // converge back to Inactive whenever reconciliation runs.
+                if (member && member.accountStatus === 'Active') {
+                    const hasUsableCoverage = (member.sessionsTotal && (parseInt(member.sessionsLeft, 10) || 0) > 0)
+                        || (member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0);
+                    if (!hasUsableCoverage) {
+                        member.accountStatus = 'Inactive';
+                        memberHealed = true;
+                    }
+                }
+
                 if (changed) DB.saveVisits(visits);
-                if (memberSessionChanged) DB.saveMembers(members);
+                if (memberSessionChanged || memberHealed) DB.saveMembers(members);
             },
 
             /**

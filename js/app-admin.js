@@ -198,15 +198,21 @@ Object.assign(App, {
                 const payments = DB.getPayments().filter(p => p.memberId === v.memberId);
                 const member = DB.getMembers().find(m => m.id === v.memberId);
 
-                // 1. Explicitly cleared by a payment record
-                const explicit = payments.find(p => Array.isArray(p.clearedVisitIds) && p.clearedVisitIds.includes(v.id));
+                // 1. Explicitly cleared by a payment record — except session-granting payments,
+                // whose clearedVisitIds are legacy artifacts (they cleared debt without consuming
+                // sessions); those visits are attributed via session quota instead.
+                const explicit = payments.find(p => Array.isArray(p.clearedVisitIds) && p.clearedVisitIds.includes(v.id)
+                    && !(p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0));
                 if (explicit) return explicit;
 
                 const entry = v.entryTime ? new Date(v.entryTime) : null;
 
-                // 2. Covered by a payment's applied date window (newest payment wins)
+                // 2. Covered by a payment's applied date window (newest payment wins).
+                // Session-granting payments are quota-based and never create coverage windows,
+                // mirroring the reconciliation engine.
                 if (entry && !isNaN(entry.getTime())) {
-                    const datedPays = payments.filter(p => p.appliedExpiration).sort((a, b) => new Date(b.date) - new Date(a.date));
+                    const datedPays = payments.filter(p => p.appliedExpiration
+                        && !(p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0)).sort((a, b) => new Date(b.date) - new Date(a.date));
                     const timePay = datedPays.find(p => {
                         const start = new Date(p.appliedStartDate || p.date);
                         const end = new Date(p.appliedExpiration);
@@ -246,9 +252,14 @@ Object.assign(App, {
                     const sessionsCoveredIds = [];
                     memberVisits.forEach(x => {
                         const xEntry = x.entryTime ? new Date(x.entryTime) : null;
-                        const xExplicit = payments.some(p => Array.isArray(p.clearedVisitIds) && p.clearedVisitIds.includes(x.id));
+                        // Ignore clearedVisitIds from session-granting payments (legacy artifacts)
+                        // so visits re-enter the quota walk — mirroring the reconciliation engine.
+                        const xExplicit = payments.some(p => Array.isArray(p.clearedVisitIds) && p.clearedVisitIds.includes(x.id)
+                            && !(p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0));
                         const xTime = xEntry && !isNaN(xEntry.getTime()) && payments.some(p => {
                             if (!p.appliedExpiration) return false;
+                            // Session-granting payments never create time windows.
+                            if (p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0) return false;
                             const start = new Date(p.appliedStartDate || p.date);
                             const end = new Date(p.appliedExpiration);
                             return !isNaN(start.getTime()) && !isNaN(end.getTime()) && xEntry >= start && xEntry <= end;
