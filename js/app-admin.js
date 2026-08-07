@@ -146,6 +146,17 @@ Object.assign(App, {
                 let csvContent = "data:text/csv;charset=utf-8,";
                 csvContent += "Date,Time,Member ID,First Name,Last Name,Belt,Status\n";
 
+                // CSV escape helper: neutralize spreadsheet formulas (=, +, -, @) that
+                // Excel/LibreOffice would otherwise execute when the file is opened.
+                const esc = (val) => {
+                    let str = String(val == null ? '' : val);
+                    if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
+                    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                        return '"' + str.replace(/"/g, '""') + '"';
+                    }
+                    return str;
+                };
+
                 let hasData = false;
                 visits.forEach(v => {
                     const visitLocalDate = v.entryTime ? Utils.dateToLocalIso(new Date(v.entryTime)) : '';
@@ -155,7 +166,7 @@ Object.assign(App, {
                             const date = visitLocalDate;
                             const time = new Date(v.entryTime).toLocaleTimeString();
                             const status = v.isUnpaid ? 'Unpaid/Expired' : 'Paid';
-                            csvContent += `${date},${time},${m.id},${m.firstName},${m.lastName},${m.belt},${status}\n`;
+                            csvContent += `${esc(date)},${esc(time)},${esc(m.id)},${esc(m.firstName)},${esc(m.lastName)},${esc(m.belt)},${esc(status)}\n`;
                             hasData = true;
                         }
                     }
@@ -384,7 +395,7 @@ Object.assign(App, {
                 const m = DB.getMembers().find(m => m.id === q || m.firstName.toLowerCase().includes(q) || m.lastName.toLowerCase().includes(q));
                 if(m) {
                     res.innerHTML = `<div class="card" style="background:#e0f2fe; border-color:#38bdf8; margin-bottom: 1rem;">
-                        <h3 style="margin:0;">Found: ${m.firstName} ${m.lastName} (${m.id})</h3>
+                        <h3 style="margin:0;">Found: ${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)} (${Utils.escapeHTML(m.id)})</h3>
                         <button class="btn-primary btn-small mt-1" onclick="App.renderMemberHistory('${m.id}', 'dashboard-history-container')">Load History</button>
                     </div>`;
                 } else {

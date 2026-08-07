@@ -181,7 +181,7 @@ Object.assign(App, {
                             case 'id': rowHTML += `<td data-label="${c.label}">${Utils.getMemberIdBadge(m)}</td>`; break;
                             case 'gender': rowHTML += `<td data-label="${c.label}">${Utils.escapeHTML(m.gender || 'Unspecified')}</td>`; break;
                             case 'age': rowHTML += `<td data-label="${c.label}">${Utils.calcAge(m.dob)}</td>`; break;
-                            case 'phone': rowHTML += `<td data-label="${c.label}">${m.phone || 'N/A'}</td>`; break;
+                            case 'phone': rowHTML += `<td data-label="${c.label}">${Utils.escapeHTML(m.phone || 'N/A')}</td>`; break;
                             case 'status': rowHTML += `<td data-label="${c.label}">${statBadge}</td>`; break;
                             case 'exp': {
                                 // For session-only packages with no validity days, prefer showing a blank expiration field
@@ -319,9 +319,11 @@ Object.assign(App, {
                 const members = DB.getMembers();
                 if (members.length === 0) return alert('No members to export.');
 
-                // CSV escape helper
+                // CSV escape helper: neutralize spreadsheet formulas (=, +, -, @) that
+                // Excel/LibreOffice would otherwise execute when the file is opened.
                 const esc = (val) => {
-                    const str = String(val == null ? '' : val);
+                    let str = String(val == null ? '' : val);
+                    if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
                     if (str.includes(',') || str.includes('"') || str.includes('\n')) {
                         return '"' + str.replace(/"/g, '""') + '"';
                     }

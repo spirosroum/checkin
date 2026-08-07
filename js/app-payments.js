@@ -17,7 +17,7 @@ Object.assign(App, {
                 // Populate member dropdown
                 const memSelect = document.getElementById('form-pay-member');
                 const members = DB.getMembers();
-                memSelect.innerHTML = '<option value="">-- Select Member --</option>' + members.sort((a,b)=>a.firstName.localeCompare(b.firstName)).map(m => `<option value="${m.id}">${m.firstName} ${m.lastName} (${m.id})</option>`).join('');
+                memSelect.innerHTML = '<option value="">-- Select Member --</option>' + members.sort((a,b)=>a.firstName.localeCompare(b.firstName)).map(m => `<option value="${m.id}">${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)} (${m.id})</option>`).join('');
                 
                 // Populate plan dropdown with price, duration days, and session counts
                 const planSelect = document.getElementById('form-pay-plan');
