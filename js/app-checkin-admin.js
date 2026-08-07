@@ -89,7 +89,7 @@ Object.assign(App, {
             },
  
             handleAdminCheckinSearch: async () => {
-                const query = document.getElementById('checkin-search').value.toLowerCase().trim();
+                const query = Utils.normalizeSearch(document.getElementById('checkin-search').value);
                 const resultCard = document.getElementById('checkin-member-card');
                 if (!query) { resultCard.classList.add('hidden'); return; }
 
@@ -97,13 +97,13 @@ Object.assign(App, {
                     await FSEngine.whenReady('members');
                 }
                 // Stale keystroke guard: the query may have changed while we waited.
-                if (document.getElementById('checkin-search').value.toLowerCase().trim() !== query) return;
+                if (Utils.normalizeSearch(document.getElementById('checkin-search').value) !== query) return;
 
                 const members = DB.getMembers();
                 const m = members.find(m => 
                     m.id === query || 
-                    m.firstName.toLowerCase().includes(query) || 
-                    m.lastName.toLowerCase().includes(query) ||
+                    Utils.normalizeSearch(m.firstName).includes(query) || 
+                    Utils.normalizeSearch(m.lastName).includes(query) ||
                     (m.phone && m.phone.includes(query))
                 );
 
@@ -390,14 +390,18 @@ Object.assign(App, {
                     App.cleanupClassCheckins();
                 }
 
-                // Decrement sessions only when the visit is paid
+                // Decrement sessions only when the visit is paid — and skip it while the member is
+                // covered by an active time-based membership, so an unlimited monthly plan does not
+                // consume leftover session bundles.
                 // NOTE — session accounting is per CHECK-IN ACTION, not per class:
                 //   * One check-in selecting 2 back-to-back classes consumes a single session.
                 //   * Two separate check-ins consume one session each (1 session on the first,
                 //     then the second is flagged as an unpaid/Needs-Renew visit because
                 //     computeVisitUnpaid() treats sessionsLeft <= 0 as unpaid, and no further
                 //     decrement happens). The merge above keeps both classes on one visit.
-                if (member.sessionsTotal && !isUnpaidVisit) {
+                const onActiveTimePlan = member.planDays != null && parseInt(member.planDays, 10) > 0
+                    && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0;
+                if (member.sessionsTotal && !isUnpaidVisit && !onActiveTimePlan) {
                     member.sessionsLeft = (parseInt(member.sessionsLeft) || 0) - 1;
                     let allMembers = DB.getMembers();
                     let mIdx = allMembers.findIndex(mem => mem.id === member.id);

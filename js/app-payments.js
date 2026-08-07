@@ -83,19 +83,19 @@ Object.assign(App, {
                 const input = document.getElementById('form-pay-member-search');
                 const results = document.getElementById('form-pay-member-results');
                 if (!input || !results) return;
-                const query = input.value.toLowerCase().trim();
+                const query = Utils.normalizeSearch(input.value);
                 const members = DB.getMembers();
                 let filtered = members;
                 if (query) {
                     filtered = members.filter(m => {
-                        const fullName = `${m.firstName || ''} ${m.lastName || ''}`.toLowerCase();
-                        return (m.id || '').toLowerCase().includes(query) ||
-                            (m.firstName || '').toLowerCase().includes(query) ||
-                            (m.lastName || '').toLowerCase().includes(query) ||
+                        const fullName = Utils.normalizeSearch(`${m.firstName || ''} ${m.lastName || ''}`);
+                        return Utils.normalizeSearch(m.id || '').includes(query) ||
+                            Utils.normalizeSearch(m.firstName || '').includes(query) ||
+                            Utils.normalizeSearch(m.lastName || '').includes(query) ||
                             fullName.includes(query);
                     });
                 }
-                filtered.sort((a, b) => a.firstName.localeCompare(b.firstName));
+                filtered.sort((a, b) => Utils.sortKey(a.firstName).localeCompare(Utils.sortKey(b.firstName)));
                 if (filtered.length === 0) {
                     results.innerHTML = '<div class="pay-member-result text-gray" style="cursor: default;">No members found.</div>';
                 } else {
@@ -257,6 +257,40 @@ Object.assign(App, {
              * that deleting a payment automatically updates all affected visits to UNPAID across
              * Payment Ledger, Visit History, Analytical Calendar, and Member History views.
              */
+            // Returns the Date of the member's FIRST UNPAID DAY: the first visit (chronologically)
+            // that is not covered by explicit clearance, a payment's date window, or drop-in session
+            // quota. The membership window starts here, so visits already paid by sessions are never
+            // re-tagged as membership dates (and their sessions are not refunded). Returns null when
+            // every visit is covered by other means.
+            computeMemberFirstUnpaidDay: (member, payments, visits) => {
+                const explicitIds = new Set();
+                payments.forEach(p => { if (Array.isArray(p.clearedVisitIds)) p.clearedVisitIds.forEach(id => explicitIds.add(id)); });
+                const timeWindows = [];
+                payments.forEach(p => {
+                    if (p.appliedExpiration) {
+                        const start = new Date(p.appliedStartDate || p.date);
+                        const end = new Date(p.appliedExpiration);
+                        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) timeWindows.push({ start, end });
+                    }
+                });
+                const capacity = payments.reduce((s, p) => {
+                    return s + (p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0 ? parseInt(p.sessionsGranted, 10) : 0);
+                }, 0);
+                const fallbackLimit = member && member.sessionsTotal ? (parseInt(member.sessionsLeft, 10) || 0) : 0;
+                let used = 0;
+                const sorted = [...visits].sort((a, b) => new Date(a.entryTime) - new Date(b.entryTime));
+                for (const v of sorted) {
+                    const entry = v.entryTime ? new Date(v.entryTime) : null;
+                    if (!entry || isNaN(entry.getTime())) continue;
+                    if (explicitIds.has(v.id)) continue;
+                    if (timeWindows.some(w => entry >= w.start && entry <= w.end)) continue;
+                    const limit = capacity > 0 ? capacity : fallbackLimit;
+                    if (used < limit) { used++; continue; }
+                    return entry;
+                }
+                return null;
+            },
+
             reconcileMemberPaymentVisitStatus: (memberId, deletedPayment = null) => {
                 if (!memberId) return;
                 const payments = DB.getPayments().filter(p => p.memberId === memberId);
@@ -273,24 +307,33 @@ Object.assign(App, {
                     }
                 });
 
-                // Step 2: Gather date coverage windows from remaining active payments
+                // Step 2: Gather date coverage windows from remaining active payments.
+                // A payment's own window starts at its appliedStartDate (or payment date) —
+                // never at the epoch — so it can't retroactively cover visits that predate it.
                 const timeWindows = [];
                 payments.forEach(payment => {
                     if (payment.appliedExpiration) {
                         const startStr = payment.appliedStartDate || payment.date;
-                        const start = startStr ? new Date(startStr) : new Date(0);
+                        if (!startStr) return;
+                        const start = new Date(startStr);
                         const end = new Date(payment.appliedExpiration);
                         if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
                             timeWindows.push({ start, end });
                         }
                     }
                 });
-                // Include active member expiration window if member currently has a valid expirationDate
-                if (member && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) {
-                    const end = new Date(member.expirationDate);
-                    if (!isNaN(end.getTime())) {
-                        timeWindows.push({ start: new Date(0), end });
-                    }
+                // Member membership window: the active membership covers visits from the FIRST
+                // UNPAID DAY (the first visit not covered by explicit clearing, a payment window,
+                // or drop-in session quota) up to the expiration date. It must NOT start at the
+                // epoch: visits already paid by drop-in sessions were purchased separately and
+                // must not be re-tagged as membership dates (that refunded consumed sessions).
+                const isTimeCoveredMember = member && (!member.sessionsTotal || member.planDays != null);
+                const memberExpires = (member && member.expirationDate) ? new Date(member.expirationDate) : null;
+                const memberWindowActive = isTimeCoveredMember && memberExpires
+                    && !isNaN(memberExpires.getTime()) && Utils.getDaysRemaining(member.expirationDate) >= 0;
+                let memberWindowStart = null;
+                if (memberWindowActive) {
+                    memberWindowStart = App.computeMemberFirstUnpaidDay(member, payments, memberVisits);
                 }
 
                 // Step 3: Calculate total session quota granted by remaining active payments
@@ -337,6 +380,14 @@ Object.assign(App, {
                         shouldBePaid = false;
                     }
 
+                    // Membership window: once the first unpaid day is reached, every following
+                    // visit up to the expiration date is covered by the membership — without
+                    // consuming any session quota (those visits were never session-covered).
+                    if (!shouldBePaid && memberWindowStart && entry && !isNaN(entry.getTime())
+                        && entry >= memberWindowStart && entry <= memberExpires) {
+                        shouldBePaid = true;
+                    }
+
                     // Mutate isUnpaid flag only if status changed
                     if (v.isUnpaid && shouldBePaid) {
                         v.isUnpaid = false;
@@ -347,7 +398,24 @@ Object.assign(App, {
                     }
                 });
 
+                // Keep the member's session balance in sync with the reconciled state:
+                // sessionsLeft = total session quota granted by remaining payments minus the
+                // sessions already consumed by visits covered through that quota. This ensures
+                // that when a session bundle is added after one or more unpaid check-ins, the
+                // sessions consumed by those (now-paid) visits are subtracted immediately
+                // (e.g. an 8-session bundle added after 1 unpaid training leaves 7 sessions).
+                let memberSessionChanged = false;
+                if (member && totalSessionsCapacity > 0) {
+                    const recomputedLeft = Math.max(0, totalSessionsCapacity - sessionsUsed);
+                    if (member.sessionsTotal !== true || (parseInt(member.sessionsLeft, 10) || 0) !== recomputedLeft) {
+                        member.sessionsTotal = true;
+                        member.sessionsLeft = recomputedLeft;
+                        memberSessionChanged = true;
+                    }
+                }
+
                 if (changed) DB.saveVisits(visits);
+                if (memberSessionChanged) DB.saveMembers(members);
             },
 
             /**
@@ -413,6 +481,23 @@ Object.assign(App, {
                     }).map(v => v.id);
                 }
 
+                // For session-granting payments (e.g. a drop-in bundle), anchor the bundle's
+                // starting day to the member's first unpaid training: the newly granted sessions
+                // are consumed starting from that date, so the recorded start must match it.
+                let bundleStartIso = null;
+                if (sessionsGranted != null && sessionsGranted > 0) {
+                    const unpaidVisits = DB.getVisits().filter(v => v.memberId === memberId && v.isUnpaid);
+                    let earliestMs = Infinity;
+                    unpaidVisits.forEach(v => {
+                        const t = v.entryTime ? new Date(v.entryTime).getTime() : NaN;
+                        if (!isNaN(t) && t < earliestMs) earliestMs = t;
+                    });
+                    if (isFinite(earliestMs)) {
+                        const d = new Date(earliestMs);
+                        bundleStartIso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+                    }
+                }
+
                 const newPay = {
                     id,
                     memberId,
@@ -422,7 +507,7 @@ Object.assign(App, {
                     planId: planId || (originalPayment ? originalPayment.planId : null),
                     sessionsGranted: sessionsGranted !== null ? sessionsGranted : (originalPayment ? originalPayment.sessionsGranted : null),
                     appliedExpiration: newExp || null,
-                    appliedStartDate: document.getElementById('form-pay-start').value || document.getElementById('form-pay-date').value,
+                    appliedStartDate: bundleStartIso || document.getElementById('form-pay-start').value || document.getElementById('form-pay-date').value,
                     prevExpiration: prevExp || null,
                     clearedVisitIds
                 };
@@ -443,6 +528,21 @@ Object.assign(App, {
                     DB.saveMembers(members);
                 }
 
+                // Track the active plan type on the member. A pure time-based plan (validity days,
+                // no sessions) marks an unlimited membership — its active period must not consume
+                // leftover session bundles. Any session-granting plan resets planDays to null so
+                // the member is treated as session-based.
+                if (m && planId) {
+                    const plan = DB.getPlans().find(p => p.id === planId);
+                    const isTimeBasedPlan = !!(plan && plan.days != null && plan.days !== ''
+                        && !(plan.sessions != null && plan.sessions !== ''));
+                    const newPlanDays = isTimeBasedPlan ? (parseInt(plan.days, 10) || 0) * qty : null;
+                    if ((m.planDays != null ? m.planDays : null) !== newPlanDays) {
+                        m.planDays = newPlanDays;
+                        DB.saveMembers(members);
+                    }
+                }
+
                 // Apply expiration plan updates to member profile
                 if (newExp && m) {
                     m.expirationDate = newExp;
@@ -452,8 +552,12 @@ Object.assign(App, {
                     }
                 }
 
-                // Auto-activate member on positive payment amount
-                if (m && m.accountStatus !== 'Active' && newPay.amount && parseFloat(newPay.amount) > 0) {
+                // Auto-activate member on positive payment amount — but only when the payment
+                // actually grants coverage (session quota or an expiration window). A generic
+                // custom payment with no plan must not silently activate a member into free
+                // unlimited check-ins.
+                if (m && m.accountStatus !== 'Active' && newPay.amount && parseFloat(newPay.amount) > 0
+                    && ((sessionsGranted != null && sessionsGranted > 0) || !!newExp)) {
                     m.accountStatus = 'Active';
                     DB.saveMembers(members);
                     App.addNotification('Member Activated', `${m.firstName} ${m.lastName} was activated by recorded payment.`, 'success', m.id);
@@ -595,6 +699,16 @@ Object.assign(App, {
                         // Deleted payment was the only one that set an expiration — clear it
                         members[mIdx].expirationDate = '';
                     }
+
+                    // --- planDays: recompute from the remaining time-based (unlimited) payments ---
+                    const timePayments = memberPays
+                        .filter(p => p.planId && p.appliedExpiration)
+                        .sort((a, b) => new Date(b.date) - new Date(a.date));
+                    const latestTimePayment = timePayments[0];
+                    const timePlan = latestTimePayment ? DB.getPlans().find(pl => pl.id === latestTimePayment.planId) : null;
+                    const isTimeBasedPlan = !!(timePlan && timePlan.days != null && timePlan.days !== ''
+                        && !(timePlan.sessions != null && timePlan.sessions !== ''));
+                    members[mIdx].planDays = isTimeBasedPlan ? (parseInt(timePlan.days, 10) || 0) : null;
 
                     // --- Account Status: set Inactive if no remaining payments cover this member ---
                     const hasRemainingCoverage = memberPays.length > 0 && (

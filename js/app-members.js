@@ -48,10 +48,32 @@ Object.assign(App, {
                 App.renderMemberDirectory();
             },
 
-            renderMemberDirectory: () => {
+            // Auto-move Active members whose status is "No sessions" (out of sessions)
+            // and who haven't trained for 28+ days over to Inactive.
+            autoDeactivateDormant: () => {
                 const members = DB.getMembers();
                 const visits = DB.getVisits();
-                const query = document.getElementById('member-directory-search').value.toLowerCase().trim();
+                const cutoff = Date.now() - 28 * 24 * 60 * 60 * 1000;
+                let changed = false;
+                members.forEach(m => {
+                    if ((m.accountStatus || 'Active') !== 'Active') return;
+                    if (!(m.sessionsTotal && parseInt(m.sessionsLeft) <= 0)) return;
+                    const lastVisit = visits.filter(v => v.memberId === m.id).sort((x, y) => new Date(y.entryTime) - new Date(x.entryTime))[0];
+                    const lastTime = lastVisit ? new Date(lastVisit.entryTime).getTime() : 0;
+                    if (!lastTime || lastTime < cutoff) {
+                        m.accountStatus = 'Inactive';
+                        changed = true;
+                    }
+                });
+                if (changed) DB.saveMembers(members);
+            },
+
+            renderMemberDirectory: () => {
+                App.autoDeactivateDormant();
+                const members = DB.getMembers();
+                const visits = DB.getVisits();
+                const rawQuery = document.getElementById('member-directory-search').value.trim();
+                const query = Utils.normalizeSearch(rawQuery);
                 const activeCols = App.columnsConfig.filter(c => c.checked);
 
                 // Setup headers based on active columns
@@ -68,15 +90,15 @@ Object.assign(App, {
                 // "First Last" (and "Last First") full name, phone, or email.
                 let filtered = members.filter(m => {
                     if (!query) return true;
-                    const fullName = `${m.firstName || ''} ${m.lastName || ''}`.toLowerCase();
-                    const revName = `${m.lastName || ''} ${m.firstName || ''}`.toLowerCase();
-                    return (m.id || '').toLowerCase().includes(query)
-                        || (m.firstName || '').toLowerCase().includes(query)
-                        || (m.lastName || '').toLowerCase().includes(query)
+                    const fullName = Utils.normalizeSearch(`${m.firstName || ''} ${m.lastName || ''}`);
+                    const revName = Utils.normalizeSearch(`${m.lastName || ''} ${m.firstName || ''}`);
+                    return Utils.normalizeSearch(m.id || '').includes(query)
+                        || Utils.normalizeSearch(m.firstName || '').includes(query)
+                        || Utils.normalizeSearch(m.lastName || '').includes(query)
                         || fullName.includes(query)
                         || revName.includes(query)
                         || (m.phone && m.phone.includes(query))
-                        || (m.email && m.email.toLowerCase().includes(query));
+                        || (m.email && Utils.normalizeSearch(m.email).includes(query));
                 });
 
                 // Filter by selected status submenu (active / inactive / frozen).
@@ -104,7 +126,7 @@ Object.assign(App, {
                 if (hintEl && hintTextEl) {
                     if (query) {
                         hintEl.classList.remove('hidden');
-                        hintTextEl.innerHTML = `Found <strong>${filtered.length}</strong> member${filtered.length === 1 ? '' : 's'} matching &quot;<strong>${Utils.escapeHTML(query)}</strong>&quot; — includes all statuses.`;
+                        hintTextEl.innerHTML = `Found <strong>${filtered.length}</strong> member${filtered.length === 1 ? '' : 's'} matching &quot;<strong>${Utils.escapeHTML(rawQuery)}</strong>&quot; — includes all statuses.`;
                     } else {
                         hintEl.classList.add('hidden');
                     }
@@ -152,8 +174,9 @@ Object.assign(App, {
                         default: valA = a.id; valB = b.id;
                     }
                     if (typeof valA === 'string' && typeof valB === 'string') {
-                        const cmp = valA.localeCompare(valB, ['el', 'en']);
-                        if (cmp !== 0) return App.dirSortAsc ? cmp : -cmp;
+                        const keyA = Utils.sortKey(valA);
+                        const keyB = Utils.sortKey(valB);
+                        if (keyA !== keyB) return App.dirSortAsc ? (keyA < keyB ? -1 : 1) : (keyA < keyB ? 1 : -1);
                         return 0;
                     }
                     if (valA < valB) return App.dirSortAsc ? -1 : 1;
@@ -534,12 +557,29 @@ Object.assign(App, {
                     mData.sessionsTotal = true;
                     mData.sessionsLeft = document.getElementById('form-sessions-left').value;
                 } else {
-                    mData.sessionsTotal = false;
-                    mData.sessionsLeft = null;
+                    // Applying a non-session plan hides the sessions field, but that must NOT
+                    // erase a pre-existing session balance (e.g. an unlimited monthly plan applied
+                    // on top of a leftover 4-session bundle). Preserve the member's current balance.
+                    const prevMember = originalId ? members.find(m => m.id === originalId) : null;
+                    if (prevMember && prevMember.sessionsTotal) {
+                        mData.sessionsTotal = true;
+                        mData.sessionsLeft = prevMember.sessionsLeft;
+                    } else {
+                        mData.sessionsTotal = false;
+                        mData.sessionsLeft = null;
+                    }
                 }
 
                 const paymentAmt = parseFloat(document.getElementById('form-last-payment').value) || 0;
                 const planId = document.getElementById('form-plan-select').value || '';
+
+                // Mark members with a pure time-based plan (validity days, no sessions) so the
+                // check-in logic knows this member is on an unlimited membership and must not
+                // consume their leftover session bundles during the active period.
+                const appliedPlan = planId ? DB.getPlans().find(p => p.id === planId) : null;
+                const isTimeBasedPlan = !!(appliedPlan && appliedPlan.days != null && appliedPlan.days !== ''
+                    && !(appliedPlan.sessions != null && appliedPlan.sessions !== ''));
+                mData.planDays = isTimeBasedPlan ? parseInt(appliedPlan.days, 10) : null;
 
                 // If a plan/payment is provided at registration, activate the account automatically
                 if (paymentAmt > 0 && planId) {
@@ -548,6 +588,13 @@ Object.assign(App, {
 
                 // Ensure new registrations default to Inactive when no plan/payment was provided
                 if (!originalId && !(paymentAmt > 0 && planId)) {
+                    mData.accountStatus = 'Inactive';
+                }
+
+                // Close the loophole: an edited member whose expiration date is cleared
+                // (and who has no remaining sessions to fall back on) cannot stay Active.
+                if (originalId && mData.accountStatus === 'Active' && !mData.expirationDate
+                    && !(mData.sessionsTotal && parseInt(mData.sessionsLeft) > 0)) {
                     mData.accountStatus = 'Inactive';
                 }
 
@@ -586,12 +633,18 @@ Object.assign(App, {
                     const prevExp = '';
                     const appliedExp = mData.expirationDate || null;
                     const appliedStartDate = document.getElementById('form-start-date') ? document.getElementById('form-start-date').value : null;
+                    // Record the plan's session quota on the log so the payment ledger is the
+                    // single source of truth for session balances (reconciliation restores
+                    // consumed sessions correctly when check-ins are edited/deleted).
+                    const planSessions = plan && plan.sessions != null && plan.sessions !== '' ? (parseInt(plan.sessions, 10) || 0) : null;
                     payments.push({
                         id: 'PAY-' + Date.now(),
                         memberId: id,
                         date: Utils.todayLocalIso(),
                         amount: paymentAmt,
                         note: `System Auto-Log: Applied Plan '${plan ? plan.name : 'Unknown'}'`,
+                        planId,
+                        sessionsGranted: planSessions,
                         appliedExpiration: appliedExp,
                         appliedStartDate: appliedStartDate,
                         prevExpiration: prevExp

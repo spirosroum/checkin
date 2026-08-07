@@ -401,13 +401,17 @@ Object.assign(App, {
                 App.cleanupClassCheckins();
 
                 // Decrement sessionsLeft only when the visit is considered paid (i.e., not unpaid)
+                // and the member is NOT currently covered by an active time-based membership —
+                // during an unlimited monthly plan, leftover session bundles must not be consumed.
                 // NOTE — session accounting is per CHECK-IN ACTION, not per class:
                 //   * One check-in selecting 2 back-to-back classes consumes a single session.
                 //   * Two separate check-ins consume one session each (1 session on the first,
                 //     then the second is flagged as an unpaid/Needs-Renew visit because
                 //     computeVisitUnpaid() treats sessionsLeft <= 0 as unpaid, and no further
                 //     decrement happens). The merge above keeps both classes on one visit.
-                if (member.sessionsTotal && !isUnpaidVisit) {
+                const onActiveTimePlan = member.planDays != null && parseInt(member.planDays, 10) > 0
+                    && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0;
+                if (member.sessionsTotal && !isUnpaidVisit && !onActiveTimePlan) {
                     member.sessionsLeft = (parseInt(member.sessionsLeft) || 0) - 1;
                     const allMembers = DB.getMembers();
                     const mIdx = allMembers.findIndex(m => m.id === member.id);

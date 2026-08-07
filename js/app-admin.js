@@ -214,14 +214,23 @@ Object.assign(App, {
                     });
                     if (timePay) return timePay;
 
-                    // Covered by the member's current expiration window — attribute to the payment that set it
-                    if (member && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) {
+                    // Covered by the member's current expiration window — attribute to the payment that set it.
+                    // Mirrors the reconciliation guard: session-based members (sessionsTotal without a
+                    // time-based planDays) must not get visits covered by a stale expirationDate, and the
+                    // membership window starts at the FIRST UNPAID DAY — visits already paid by drop-in
+                    // sessions are never re-attributed to the membership.
+                    const isTimeCoveredMember = member && (!member.sessionsTotal || member.planDays != null);
+                    if (isTimeCoveredMember && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) {
                         const end = new Date(member.expirationDate);
                         if (!isNaN(end.getTime()) && entry <= end) {
-                            const expPay = payments
-                                .filter(p => p.appliedExpiration === member.expirationDate)
-                                .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-                            if (expPay) return expPay;
+                            const memberVisits = DB.getVisits().filter(x => x.memberId === member.id);
+                            const firstUnpaidDay = App.computeMemberFirstUnpaidDay(member, payments, memberVisits);
+                            if (firstUnpaidDay && entry >= firstUnpaidDay) {
+                                const expPay = payments
+                                    .filter(p => p.appliedExpiration === member.expirationDate)
+                                    .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+                                if (expPay) return expPay;
+                            }
                         }
                     }
                 }
@@ -272,8 +281,8 @@ Object.assign(App, {
                 if (statusFilter === 'unpaid') { visits = visits.filter(v => v.isUnpaid); }
 
                 const nameMap = new Map();
-                members.forEach(m => nameMap.set(m.id, `${m.firstName} ${m.lastName}`.toLowerCase()));
-                binMembers.forEach(m => { if (!nameMap.has(m.id)) nameMap.set(m.id, `${m.firstName} ${m.lastName}`.toLowerCase()); });
+                members.forEach(m => nameMap.set(m.id, Utils.sortKey(`${m.firstName} ${m.lastName}`)));
+                binMembers.forEach(m => { if (!nameMap.has(m.id)) nameMap.set(m.id, Utils.sortKey(`${m.firstName} ${m.lastName}`)); });
 
                 if (sortBy === 'name-asc') {
                     visits.sort((a, b) => (nameMap.get(a.memberId) || '').localeCompare(nameMap.get(b.memberId) || ''));
@@ -372,6 +381,10 @@ Object.assign(App, {
                     if(exitVal) v.exitTime = new Date(exitVal).toISOString();
                     else v.exitTime = null;
                     DB.saveVisits(visits);
+                    // Moving a visit in time can change which payment/session covers it, so
+                    // re-run the reconciliation engine to keep isUnpaid flags and the member's
+                    // session balance consistent.
+                    if (v.memberId) App.reconcileMemberPaymentVisitStatus(v.memberId);
                     App.closeModal('modal-visit');
                     App.renderVisitLog();
                 }
@@ -381,9 +394,15 @@ Object.assign(App, {
                 if(!confirm('Permanently delete this check-in record?')) return;
                 const id = document.getElementById('form-visit-id').value;
                 const visits = DB.getVisits();
-                const remainingVisits = visits.filter(v => v.id !== id);
+                const v = visits.find(x => x.id === id);
+                const memberId = v ? v.memberId : null;
+                const remainingVisits = visits.filter(x => x.id !== id);
                 DB.saveVisits(remainingVisits);
                 App.cleanupClassCheckins();
+                // A deleted check-in may have consumed a session at check-in time; re-run
+                // reconciliation so the consumed session is restored (or an unpaid visit is
+                // removed from the member's debt) instead of silently losing the session.
+                if (memberId) App.reconcileMemberPaymentVisitStatus(memberId);
                 App.closeModal('modal-visit');
                 App.renderVisitLog();
                 App.renderLivePresent();
@@ -394,10 +413,10 @@ Object.assign(App, {
             },
 
             searchDashboardHistory: () => {
-                const q = document.getElementById('dashboard-history-search').value.toLowerCase().trim();
+                const q = Utils.normalizeSearch(document.getElementById('dashboard-history-search').value);
                 const res = document.getElementById('dashboard-history-results');
                 if(!q || q.length < 2) { res.innerHTML = ''; return; }
-                const m = DB.getMembers().find(m => m.id === q || m.firstName.toLowerCase().includes(q) || m.lastName.toLowerCase().includes(q));
+                const m = DB.getMembers().find(m => m.id === q || Utils.normalizeSearch(m.firstName).includes(q) || Utils.normalizeSearch(m.lastName).includes(q));
                 if(m) {
                     res.innerHTML = `<div class="card" style="background:#e0f2fe; border-color:#38bdf8; margin-bottom: 1rem;">
                         <h3 style="margin:0;">Found: ${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)} (${Utils.escapeHTML(m.id)})</h3>

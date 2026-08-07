@@ -868,6 +868,17 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 return Utils.formatDurationMins(mins);
             },
             escapeHTML: (str) => { if (!str) return ''; const div = document.createElement('div'); div.innerText = str; return div.innerHTML; },
+            // Normalize a string into a locale-independent sort key so Greek names
+            // sort alphabetically in every browser. Strips combining accents (tonos),
+            // lowercases, and unifies final sigma. Greek letters' Unicode order
+            // matches the Greek alphabet, so code-point comparison is correct.
+            sortKey: (str) => String(str == null ? '' : str)
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/ς/g, 'σ'),
+            // Accent-insensitive search normalization (e.g. "Σπύρος" == "Σπυρος").
+            normalizeSearch: (str) => Utils.sortKey(str),
             renderRichText: (text) => {
                 if (!text) return '';
                 const normalized = text.replace(/\r\n?/g, '\n');
@@ -1165,10 +1176,20 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
             // Determine whether a visit created for this member should be marked unpaid by default
             // Logic:
-            // - Frozen accounts are treated as unpaid/needs-attention
-            // - If member has a validity window (planDays / expirationDate) and it's expired -> unpaid
-            // - If member is session-based (planDays falsy, sessionsTotal true) and sessionsLeft <= 0 -> unpaid
-            // - Otherwise consider the visit paid (staff may still mark unpaid via payments UI)
+            // - Frozen/Inactive accounts are treated as unpaid/needs-attention
+            // - An ACTIVE time-based membership (planDays set + unexpired expirationDate) always
+            //   covers the visit — even if a leftover session balance exists. This prevents an
+            //   unlimited monthly member from being flagged unpaid just because their session
+            //   count hit zero (mixed plan scenario).
+            // - Otherwise, if the member is session-based (sessionsTotal true): paid only while
+            //   sessions remain. A leftover session balance can still cover visits after a
+            //   time-based plan has expired.
+            // - A time-based plan (planDays) that is set but expired -> unpaid (no session fallback).
+            // - Legacy members without plan metadata stay paid while they hold an unexpired
+            //   expirationDate (manual expiration workflow).
+            // - An Active member with NO coverage at all (no plan, no expiration, no sessions)
+            //   is treated as unpaid — closes the free-rider loophole where an account activated
+            //   by a generic payment could check in as fully paid forever.
             // NOTE: Because a session is consumed per CHECK-IN ACTION (not per class), a member who
             // checks in separately for 2 back-to-back classes with only 1 session left will have the
             // first check-in consume the session and the second check-in flagged as unpaid here.
@@ -1177,9 +1198,11 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (member.accountStatus === 'Frozen') return true;
                 if (member.accountStatus === 'Inactive') return true;
                 const planDays = member.planDays != null ? parseInt(member.planDays, 10) : null;
-                if (planDays && (!member.expirationDate || Utils.getDaysRemaining(member.expirationDate) < 0)) return true;
-                if (member.sessionsTotal && (parseInt(member.sessionsLeft) || 0) <= 0) return true;
-                return false;
+                if (planDays && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) return false;
+                if (member.sessionsTotal) return (parseInt(member.sessionsLeft) || 0) <= 0;
+                if (planDays) return true;
+                if (member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) return false;
+                return true;
             },
 
             normalizeScheduleSlotId: (classId, slotDay, slotStart, slotEnd) => {
@@ -1294,9 +1317,25 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 }
             },
 
+            // One-time startup reconciliation: re-derives each member's session
+            // balance and visit paid/unpaid statuses from their payment records
+            // (the single source of truth). This self-heals data recorded before
+            // the session-accounting fixes — e.g. sessionsLeft was not decremented
+            // when a session bundle was added after unpaid trainings. Idempotent:
+            // reconcileMemberPaymentVisitStatus only persists when something
+            // actually changes, so this is a no-op on every load after the first.
+            // Members without any payment records are left untouched.
+            reconcileAllMemberPayments: () => {
+                const memberIds = new Set(DB.getPayments().map(p => p.memberId));
+                memberIds.forEach(mid => {
+                    try { App.reconcileMemberPaymentVisitStatus(mid); } catch (e) { console.warn('Startup reconciliation failed for', mid, e); }
+                });
+            },
+
             init: () => {
                 App.cleanBin(); 
                 App.updateUICurrency();
+                App.reconcileAllMemberPayments();
  
                 // Member login Enter is handled by the inline onkeyup on #member-login-id in index.html.
                 // (A second listener here caused loginAsMember to run twice per Enter press.)
