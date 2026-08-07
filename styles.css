@@ -79,6 +79,7 @@
         }
         .kiosk-header .lang-select::-ms-expand { display: none !important; }
         .kiosk-header select.btn-outline { color: white; border-color: rgba(255,255,255,0.3); }
+        .member-header { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
         .member-header .btn-outline {
             height: 44px;
             line-height: 1.2;
@@ -97,8 +98,8 @@
         .btn-large { padding: 1rem 2rem; font-size: 1.1rem; width: 100%; }
         
         /* Calendar month navigation (dashboard check-in calendar) */
-        .month-nav { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; padding: 0.4rem 0.5rem; font-size: 1.1rem; line-height: 1; }
-        .month-picker { max-width: 190px; min-height: 36px; padding: 0.35rem 0.6rem; text-align: center; font-weight: 600; }
+        .month-nav { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; padding: 0; font-size: 1.1rem; line-height: 1; }
+        .month-picker { max-width: 190px; height: 36px; padding: 0.35rem 0.6rem; text-align: center; font-weight: 600; }
         .export-section { border-top: 1px solid var(--gray-light); padding-top: 1rem; }
         @media (max-width: 480px) { .calendar-month-nav { width: 100%; justify-content: space-between; } .month-picker { flex: 1; max-width: none; } }
         
@@ -262,7 +263,7 @@
         .portal-drawer {
             position: fixed;
             top: 0;
-            left: -300px;
+            right: -300px;
             width: 280px;
             height: 100vh;
             height: 100dvh;
@@ -274,10 +275,10 @@
             padding: 0 0 1.5rem 0;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
         }
-        .portal-drawer.open { left: 0; }
+        .portal-drawer.open { right: 0; }
         .portal-drawer-overlay {
             position: fixed;
             top: 0;
@@ -351,6 +352,17 @@
             flex-shrink: 0;
             font-size: 1.35rem;
             line-height: 1;
+        }
+        /* Compact language toggle shown in the kiosk & member headers */
+        .portal-lang-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.45rem;
+            min-width: 48px;
+            padding: 0 0.9rem;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
 
         /* Main Content */
@@ -472,6 +484,9 @@
             .kiosk-header h1 { font-size: 1.15rem; }
             .kiosk-header .kiosk-header-actions { justify-content: flex-end; width: auto; }
             .portal-menu-toggle { width: 44px; height: 44px; }
+            /* Phone: menu items live in the right-side drawer; header keeps lang + hamburger */
+            .portal-header-action { display: none; }
+            .portal-lang-btn .portal-lang-text { display: none; }
 
             /* Member portal top bar: title left, menu button right; wrap cleanly on narrow phones */
             .member-topbar { flex-wrap: wrap; gap: 0.75rem; }
@@ -554,6 +569,13 @@
             /* Keep page headings compact */
             .view-pane h1 { font-size: 1.35rem; margin-bottom: 0.35rem; }
             .view-pane > p.text-gray, .view-pane .mb-2 > p.text-gray { font-size: 0.85rem; }
+        }
+
+        /* Desktop: no sliding drawer — portal actions sit directly in the header */
+        @media (min-width: 769px) {
+            .portal-drawer,
+            .portal-drawer-overlay { display: none !important; }
+            .portal-menu-only { display: none !important; }
         }
 
         /* Kiosk Broadcast Notice Banner Styles */

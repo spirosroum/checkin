@@ -249,9 +249,18 @@ App.applyKioskTranslations = function() {
         // Buttons in header
         const headerButtons = Array.from(document.querySelectorAll('#view-kiosk .kiosk-header .btn-primary, #view-kiosk .kiosk-header .btn-outline'));
         headerButtons.forEach(btn => {
-            if (btn.getAttribute && btn.getAttribute('onclick')?.includes("App.showPublicPlans")) btn.innerText = map.viewPlans;
-            if (btn.getAttribute && btn.getAttribute('onclick')?.includes("App.showPublicClasses")) btn.innerText = map.availableClasses || 'Available Classes';
-            if (btn.getAttribute && btn.getAttribute('onclick')?.includes("modal-login")) btn.innerText = map.infoLogin;
+            if (btn.getAttribute && btn.getAttribute('onclick')?.includes("App.showPublicPlans")) { btn.innerText = map.viewPlans; btn.title = map.viewPlans; }
+            if (btn.getAttribute && btn.getAttribute('onclick')?.includes("App.showPublicClasses")) { btn.innerText = map.availableClasses || 'Available Classes'; btn.title = map.availableClasses || 'Available Classes'; }
+            if (btn.getAttribute && btn.getAttribute('onclick')?.includes("modal-login")) { btn.innerText = map.infoLogin; btn.title = map.infoLogin; }
+        });
+        // Member header action buttons (desktop layout shows them directly)
+        const memberHeaderButtons = Array.from(document.querySelectorAll('#view-member .member-header .btn-outline'));
+        memberHeaderButtons.forEach(btn => {
+            const oc = btn.getAttribute && btn.getAttribute('onclick');
+            if (!oc) return;
+            if (oc.includes('App.showPublicPlans')) { btn.innerText = map.viewPlans; btn.title = map.viewPlans; }
+            else if (oc.includes('App.showPublicClasses')) { btn.innerText = map.availableClasses || 'Available Classes'; btn.title = map.availableClasses || 'Available Classes'; }
+            else if (oc.includes('App.logout')) { btn.innerText = map.memberPortalLogout || 'Logout'; btn.title = map.memberPortalLogout || 'Logout'; }
         });
 
         // ---- Shared sliding drawer translations (kiosk & member portal) ----
@@ -274,6 +283,18 @@ App.applyKioskTranslations = function() {
         if (kioskDrawerLang) kioskDrawerLang.innerText = langLabelText;
         const memberDrawerLang = document.getElementById('member-drawer-lang');
         if (memberDrawerLang) memberDrawerLang.innerText = langLabelText;
+        // Header language buttons (kiosk & member) — flag + language name
+        const langBtnText = lang === 'en' ? 'English' : 'Ελληνικά';
+        const langBtnTitle = map.toggleLanguageTitle || 'Toggle language';
+        ['kiosk-lang-btn', 'member-lang-btn'].forEach(id => {
+            const langBtn = document.getElementById(id);
+            if (langBtn) {
+                const langBtnSpan = langBtn.querySelector('.portal-lang-text');
+                if (langBtnSpan) langBtnSpan.innerText = langBtnText;
+                langBtn.title = langBtnTitle;
+                langBtn.setAttribute('aria-label', langBtnTitle);
+            }
+        });
         // Keep hamburger toggles' accessible labels in sync with the active language
         const menuBtnTitle = map.menuLabel || 'Menu';
         const kioskMenuBtn = document.getElementById('kiosk-menu-btn');

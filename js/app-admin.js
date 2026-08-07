@@ -280,8 +280,10 @@ Object.assign(App, {
                     if (v.isUnpaid) unpaidCount++;
 
                     const nameHtml = isDeleted
-                        ? `<strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong> <span class="text-gray">(${m.id})</span> <span class="badge badge-inactive" style="font-size:0.7rem;">Deleted Member</span>`
-                        : `<strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong> <span class="text-gray">(${m.id})</span>`;
+                        ? `<strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong> <span class="badge badge-inactive" style="font-size:0.7rem;">Deleted Member</span>`
+                        : `<strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong>`;
+                    // Member ID inside the belt-styled box; every box keeps the same fixed width
+                    const idBadge = Utils.getMemberIdBadge(m);
                     // Combined Status & Payment: unpaid check-ins show "Unpaid",
                     // paid ones show the covering payment record that makes it OK
                     let statusHtml = `<span class="badge badge-inactive">Unpaid</span>`;
@@ -303,7 +305,8 @@ Object.assign(App, {
                     // class instead of the entry/exit times. Plain open-gym check-ins keep showing
                     // their entry time and duration. buildVisitClassTags safely falls back to a
                     // generic "Class" label if the class was later deleted from the schedule.
-                    const classTags = App.buildVisitClassTags(v);
+                    // Tags stack the class hours below the class name so the column stays narrow.
+                    const classTags = App.buildVisitClassTags(v, false, true);
                     let entryHtml = classTags
                         ? classTags
                         : `<div>${Utils.formatTime(v.entryTime)} ${v.exitTime ? ` - ${Utils.formatTime(v.exitTime)}` : '(Inside)'}</div>
@@ -312,9 +315,9 @@ Object.assign(App, {
                     return `
                     <tr${isDeleted ? ' style="opacity:0.6;"' : ''}>
                         <td data-label="Date">${Utils.formatDate(v.entryTime)}</td>
-                        <td data-label="Member Name">${nameHtml}</td>
-                        <td data-label="Belt">${Utils.getBeltBadge(m.belt)}</td>
                         <td data-label="Entry & Class">${entryHtml}</td>
+                        <td data-label="Member Name">${nameHtml}</td>
+                        <td data-label="ID">${idBadge}</td>
                         <td data-label="Status & Payment">${statusHtml}</td>
                         <td data-label="Action" class="cell-actions"><button class="btn-outline btn-small" onclick="App.openVisitEditModal('${v.id}')">Edit</button></td>
                     </tr>

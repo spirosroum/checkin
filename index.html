@@ -26,7 +26,11 @@
         <div class="kiosk-header flex justify-between align-center" style="flex-wrap: wrap; gap: 1rem;">
             <h1 id="kiosk-title-display" style="margin:0; min-width:0;">🥋 BJJ Kiosk Portal</h1>
             <div class="flex gap-1 kiosk-header-actions" style="flex-wrap: wrap; align-items: center;">
-                <button id="kiosk-menu-btn" class="btn-outline portal-menu-toggle" onclick="App.toggleKioskMenu()" aria-label="Open menu" title="Menu">☰</button>
+                <button class="btn-outline portal-header-action" onclick="App.showPublicPlans()" aria-label="View Plans" title="View Plans">View Plans</button>
+                <button class="btn-outline portal-header-action" onclick="App.showPublicClasses()" aria-label="Available Classes" title="Available Classes">Available Classes</button>
+                <button class="btn-outline portal-header-action" onclick="App.openModal('modal-login')" aria-label="Member Login" title="Member Login">Member Login</button>
+                <button id="kiosk-lang-btn" class="btn-outline portal-lang-btn" onclick="App.toggleLanguage()" aria-label="Toggle language" title="Toggle language">🇬🇧 <span class="portal-lang-text">English</span></button>
+                <button id="kiosk-menu-btn" class="btn-outline portal-menu-toggle portal-menu-only" onclick="App.toggleKioskMenu()" aria-label="Open menu" title="Menu">☰</button>
             </div>
         </div>
         <div class="kiosk-main">
@@ -391,9 +395,9 @@
                                     <thead>
                                         <tr>
                                             <th>Date</th>
-                                            <th>Member Name</th>
-                                            <th>Belt</th>
                                             <th>Entry & Class</th>
+                                            <th>Member Name</th>
+                                            <th>ID</th>
                                             <th>Status & Payment</th>
                                             <th style="width: 150px;">Action</th>
                                         </tr>
@@ -451,7 +455,12 @@
                     </div>
                 </div>
                 
-                <input type="text" id="member-directory-search" placeholder="Search all members by name or ID..." class="search-bar mt-2" style="font-size: 1rem; padding: 0.75rem;">
+                <input type="text" id="member-directory-search" placeholder="Search all members by name or ID..." class="search-bar mt-2" style="font-size: 1rem; padding: 0.75rem;" oninput="App.searchMemberDirectory()">
+
+                <div id="member-search-hint" class="hidden" style="background: var(--light); border: 1px solid var(--gray-light); border-radius: var(--border-radius); padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem;">
+                    <span id="member-search-hint-text" class="text-gray" style="font-weight: 600;"></span>
+                    <button class="btn-outline btn-small" onclick="App.clearMemberSearch()">Clear Search</button>
+                </div>
 
                 <div class="tabs mt-2">
                     <div class="tab tab-link-members active" id="tab-link-members-active" onclick="App.switchDirStatus('active')">Active Members</div>
@@ -494,7 +503,7 @@
                         <h3>Deleted Members</h3>
                         <div class="table-responsive mobile-cards">
                             <table>
-                                <thead><tr><th>ID</th><th>Name</th><th>Belt</th><th>Deleted Date</th><th>Action</th></tr></thead>
+                                <thead><tr><th>ID</th><th>Name</th><th>Deleted Date</th><th>Action</th></tr></thead>
                                 <tbody id="member-bin-list"></tbody>
                             </table>
                         </div>
@@ -907,7 +916,11 @@
             <div class="flex justify-between align-center mb-2 member-topbar">
                 <h1 id="member-dash-title" style="margin:0;">My Dashboard</h1>
                 <div class="member-header">
-                    <button id="member-menu-btn" class="btn-outline portal-menu-toggle" onclick="App.toggleMemberMenu()" aria-label="Open menu" title="Menu">☰</button>
+                    <button class="btn-outline portal-header-action" onclick="App.showPublicPlans()" aria-label="View Plans" title="View Plans">View Plans</button>
+                    <button class="btn-outline portal-header-action" onclick="App.showPublicClasses()" aria-label="Available Classes" title="Available Classes">Available Classes</button>
+                    <button class="btn-outline portal-header-action" onclick="App.logout()" aria-label="Logout" title="Logout">Logout</button>
+                    <button id="member-lang-btn" class="btn-outline portal-lang-btn" onclick="App.toggleLanguage()" aria-label="Toggle language" title="Toggle language">🇬🇧 <span class="portal-lang-text">English</span></button>
+                    <button id="member-menu-btn" class="btn-outline portal-menu-toggle portal-menu-only" onclick="App.toggleMemberMenu()" aria-label="Open menu" title="Menu">☰</button>
                 </div>
             </div>
             

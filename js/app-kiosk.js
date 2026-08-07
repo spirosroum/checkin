@@ -439,18 +439,21 @@ Object.assign(App, {
             // Build small class tags (name + time range) for a visit's class check-ins.
             // Each class checked into for the visit is shown with its own check-in/out
             // time range so multi-class visits display every class correctly.
-            buildVisitClassTags: (visit, small = false) => {
+            // When `stacked` is true, the time range renders below the class name
+            // instead of beside it (used in narrow table columns).
+            buildVisitClassTags: (visit, small = false, stacked = false) => {
                 if (!visit || !visit.id) return '';
                 const checkins = DB.getClassCheckins().filter(c => c.visitId === visit.id);
                 if (checkins.length === 0) return '';
                 const schedules = DB.getSchedules() || [];
                 const sizeStyle = small ? ' font-size:0.72rem; padding:0.15rem 0.5rem;' : ' font-size:0.8rem; padding:0.3rem 0.6rem;';
+                const layoutStyle = stacked ? ' flex-direction: column; align-items: flex-start; gap: 0.15rem;' : '';
                 return `<div class="kiosk-class-tags">${checkins.map(c => {
                     const cls = schedules.find(s => s.id === c.classId);
                     const name = cls ? cls.name : 'Class';
                     const color = (cls && cls.color) || '#2563eb';
                     const time = `${Utils.convertTo12Hour(c.slotStart)} - ${Utils.convertTo12Hour(c.slotEnd)}`;
-                    return `<span class="kiosk-class-tag" style="${sizeStyle} border-left: 3px solid ${color};">
+                    return `<span class="kiosk-class-tag" style="${sizeStyle}${layoutStyle} border-left: 3px solid ${color};">
                         <strong>${Utils.escapeHTML(name)}</strong>
                         <small>${Utils.escapeHTML(time)}</small>
                     </span>`;

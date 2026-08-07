@@ -42,6 +42,12 @@ Object.assign(App, {
                 App.renderMemberDirectory();
             },
 
+            clearMemberSearch: () => {
+                const input = document.getElementById('member-directory-search');
+                if (input) input.value = '';
+                App.renderMemberDirectory();
+            },
+
             renderMemberDirectory: () => {
                 const members = DB.getMembers();
                 const visits = DB.getVisits();
@@ -58,13 +64,20 @@ Object.assign(App, {
                 headersHTML += '<th>Action</th>';
                 headers.innerHTML = headersHTML;
                 
-                // Filter and sort members
-                let filtered = members.filter(m => 
-                    m.id.includes(query) || 
-                    m.firstName.toLowerCase().includes(query) || 
-                    m.lastName.toLowerCase().includes(query) ||
-                    (m.phone && m.phone.includes(query))
-                );
+                // Filter members by query — match ID, first/last name, the combined
+                // "First Last" (and "Last First") full name, phone, or email.
+                let filtered = members.filter(m => {
+                    if (!query) return true;
+                    const fullName = `${m.firstName || ''} ${m.lastName || ''}`.toLowerCase();
+                    const revName = `${m.lastName || ''} ${m.firstName || ''}`.toLowerCase();
+                    return (m.id || '').toLowerCase().includes(query)
+                        || (m.firstName || '').toLowerCase().includes(query)
+                        || (m.lastName || '').toLowerCase().includes(query)
+                        || fullName.includes(query)
+                        || revName.includes(query)
+                        || (m.phone && m.phone.includes(query))
+                        || (m.email && m.email.toLowerCase().includes(query));
+                });
 
                 // Filter by selected status submenu (active / inactive / frozen).
                 // When searching, ignore status so frozen/inactive members still show up.
@@ -75,6 +88,26 @@ Object.assign(App, {
                     filtered = filtered.filter(m => (m.accountStatus || 'Active') === 'Inactive');
                 } else if (!query && dirStatus === 'frozen') {
                     filtered = filtered.filter(m => (m.accountStatus || 'Active') === 'Frozen');
+                }
+
+                // While a search is active the status sub-filter is ignored, so drop the
+                // status tab highlight to avoid implying the results belong to one status.
+                document.querySelectorAll('.tab-link-members').forEach(el => el.classList.remove('active'));
+                if (!query) {
+                    const statusTab = document.getElementById(`tab-link-members-${dirStatus}`);
+                    if (statusTab) statusTab.classList.add('active');
+                }
+
+                // Show a friendly summary + clear button while searching
+                const hintEl = document.getElementById('member-search-hint');
+                const hintTextEl = document.getElementById('member-search-hint-text');
+                if (hintEl && hintTextEl) {
+                    if (query) {
+                        hintEl.classList.remove('hidden');
+                        hintTextEl.innerHTML = `Found <strong>${filtered.length}</strong> member${filtered.length === 1 ? '' : 's'} matching &quot;<strong>${Utils.escapeHTML(query)}</strong>&quot; — includes all statuses.`;
+                    } else {
+                        hintEl.classList.add('hidden');
+                    }
                 }
 
                 filtered.sort((a, b) => {
@@ -88,7 +121,18 @@ Object.assign(App, {
                             valB = (b.firstName || '').toLowerCase();
                             break;
                         }
-                        case 'id': valA = parseInt(a.id); valB = parseInt(b.id); break;
+                        case 'id': {
+                            // ID and Belt were merged into one column — clicking the ID header
+                            // sorts by belt rank (white → black) first, then by numeric ID.
+                            const beltOrder = { 'white': 0, 'blue': 1, 'purple': 2, 'brown': 3, 'black': 4 };
+                            const beltA = beltOrder[(a.belt || 'White').split('/')[0].trim().toLowerCase()] ?? 99;
+                            const beltB = beltOrder[(b.belt || 'White').split('/')[0].trim().toLowerCase()] ?? 99;
+                            if (beltA !== beltB) { valA = beltA; valB = beltB; break; }
+                            const na = parseInt(a.id, 10), nb = parseInt(b.id, 10);
+                            if (!isNaN(na) && !isNaN(nb)) { valA = na; valB = nb; break; }
+                            valA = a.id; valB = b.id;
+                            break;
+                        }
                         case 'belt': {
                             const beltOrder = { 'white': 0, 'blue': 1, 'purple': 2, 'brown': 3, 'black': 4 };
                             valA = beltOrder[(a.belt || 'White').split('/')[0].trim().toLowerCase()] ?? 99;
@@ -134,8 +178,7 @@ Object.assign(App, {
                     activeCols.forEach(c => {
                         switch(c.id) {
                             case 'name': rowHTML += `<td data-label="${c.label}"><strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong></td>`; break;
-                            case 'id': rowHTML += `<td data-label="${c.label}">${m.id}</td>`; break;
-                            case 'belt': rowHTML += `<td data-label="${c.label}">${Utils.getBeltBadge(m.belt)}</td>`; break;
+                            case 'id': rowHTML += `<td data-label="${c.label}">${Utils.getMemberIdBadge(m)}</td>`; break;
                             case 'gender': rowHTML += `<td data-label="${c.label}">${Utils.escapeHTML(m.gender || 'Unspecified')}</td>`; break;
                             case 'age': rowHTML += `<td data-label="${c.label}">${Utils.calcAge(m.dob)}</td>`; break;
                             case 'phone': rowHTML += `<td data-label="${c.label}">${m.phone || 'N/A'}</td>`; break;
@@ -161,7 +204,7 @@ Object.assign(App, {
                         ${rowHTML}
                         <td data-label="Action" class="cell-actions"><button class="btn-primary btn-small" onclick="App.openMemberModal('${m.id}')">Manage</button></td>
                     </tr>
-                `}).join('') || `<tr><td colspan="${activeCols.length + 1}" class="text-center text-gray">No members found.</td></tr>`;
+                `}).join('') || `<tr><td colspan="${activeCols.length + 1}" class="text-center text-gray">${query ? `No members found matching &quot;${Utils.escapeHTML(query)}&quot;.` : 'No members found.'}</td></tr>`;
             },
 
             renderColumnConfigurator: () => {
@@ -195,9 +238,8 @@ Object.assign(App, {
                 const bin = DB.getBin();
                 document.getElementById('member-bin-list').innerHTML = bin.map(m => `
                     <tr>
-                        <td data-label="ID">${m.id}</td>
+                        <td data-label="ID">${Utils.getMemberIdBadge(m)}</td>
                         <td data-label="Name">${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</td>
-                        <td data-label="Belt">${Utils.getBeltBadge(m.belt)}</td>
                         <td data-label="Deleted Date">${Utils.formatDate(m.deletedAt)}</td>
                         <td data-label="Action" class="cell-actions">
                             <div class="flex gap-1">
@@ -206,7 +248,7 @@ Object.assign(App, {
                             </div>
                         </td>
                     </tr>
-                `).join('') || '<tr><td colspan="5" class="text-center text-gray">Recycle bin empty.</td></tr>';
+                `).join('') || '<tr><td colspan="4" class="text-center text-gray">Recycle bin empty.</td></tr>';
             },
 
             restoreMember: (id) => {

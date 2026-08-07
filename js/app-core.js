@@ -431,6 +431,14 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const beltClass = baseBelt.toLowerCase();
                 return `<span class="belt-badge belt-${beltClass}">${baseBelt}</span>`;
             },
+            // Combined ID badge: the member ID inside the belt-colored box.
+            // All boxes keep the same fixed width so rows align uniformly.
+            getMemberIdBadge: (m) => {
+                const beltBase = (m && m.belt) ? m.belt.split('/')[0].trim() : 'White';
+                const beltClass = beltBase.toLowerCase();
+                const id = (m && m.id) ? m.id : '—';
+                return `<span class="belt-badge belt-${beltClass}" style="width: 84px; text-align: center; overflow-wrap: anywhere;">${Utils.escapeHTML(id)}</span>`;
+            },
 
             // CALCULATE EXPIRATION DATE SKIPPING CLOSED ACADEMY DATES
             // Builds a full set of closed date strings, expanding ranges and yearly-repeating entries.
@@ -500,7 +508,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             columnsConfig: [
                 {id: 'name', label: 'Name', checked: true},
                 {id: 'id', label: 'ID', checked: true},
-                {id: 'belt', label: 'Belt', checked: true},
                 {id: 'gender', label: 'Gender', checked: false},
                 {id: 'age', label: 'Age', checked: true},
                 {id: 'phone', label: 'Phone', checked: true},
