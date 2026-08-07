@@ -116,7 +116,7 @@ Object.assign(App, {
                         </td>
                         <td data-label="Validity (Days)">${p.days != null && p.days !== '' ? p.days : '-'}</td>
                         <td data-label="Sessions">${p.sessions ? p.sessions : 'Unlimited'}</td>
-                        <td data-label="Public">
+                        <td data-label="On Kiosk">
                             <label class="closed-date-toggle" title="Visible on Member Kiosk">
                                 <input type="checkbox" ${p.isPublic !== false ? 'checked' : ''} onchange="App.togglePlanVisibility('${p.id}', this.checked)">
                                 <span class="closed-date-toggle-track"></span>

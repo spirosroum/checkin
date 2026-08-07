@@ -235,7 +235,7 @@ Object.assign(App, {
                             </div>
                         </td>
                         <td data-label="Schedule" style="white-space: normal;">${slotSummary}</td>
-                        <td data-label="Public">
+                        <td data-label="On Kiosk">
                             <label class="closed-date-toggle" title="Visible on Kiosk">
                                 <input type="checkbox" ${cls.isPublic !== false ? 'checked' : ''} onchange="App.toggleClassVisibility('${cls.id}', this.checked)">
                                 <span class="closed-date-toggle-track"></span>

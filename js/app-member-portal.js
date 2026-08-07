@@ -40,17 +40,19 @@ Object.assign(App, {
 
             // Bind a Google email to a member record. Returns {error} or {ok}.
             linkGoogleEmailToMember: (member, email) => {
+                const lang = App.currentKioskLang || 'en';
+                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
                 const norm = (email || '').trim();
-                if (!norm) return { error: 'No email provided.' };
+                if (!norm) return { error: map.mobileLinkNoEmail || 'No email provided.' };
                 const existing = (member.email || '').trim().toLowerCase();
                 const incoming = norm.toLowerCase();
                 if (existing && existing !== incoming) {
-                    return { error: 'This member already has a different email linked (' + member.email + '). Ask staff to update it.' };
+                    return { error: (map.mobileLinkEmailMismatchPrefix || 'This member already has a different email linked (') + member.email + (map.mobileLinkEmailMismatchSuffix || '). Ask staff to update it.') };
                 }
                 if (existing === incoming) return { ok: true };
                 const members = DB.getMembers();
                 const idx = members.findIndex(m => m.id === member.id);
-                if (idx === -1) return { error: 'Member record not found.' };
+                if (idx === -1) return { error: map.mobileMemberRecordNotFound || 'Member record not found.' };
                 members[idx].email = norm;
                 DB.saveMembers(members);
                 member.email = norm;

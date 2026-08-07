@@ -98,12 +98,42 @@ App.KIOSK_I18N = {
         checkinOpenGymSummary: 'Not taking a class today?',
         checkinOpenGymHint: 'You can still check in for open gym time without selecting a class.',
         checkinOpenGymButton: 'Check In Without a Class (Open Gym)',
+        checkinSelectAtLeastOne: 'Please select at least one class to continue.',
         cancelButton: 'Cancel',
         checkinConfirmButton: 'Confirm Check-In',
         kioskAlertExpired: 'Attention: Your membership has expired or you are out of sessions. Please see staff.',
         kioskAlertSessions: 'Attention: You have used all your plan sessions. Please renew.',
         kioskAlertExpiring: 'Note: Your membership is about to end in ',
         kioskAlertExpiringDays: ' days.',
+        kioskAlertMembershipTitle: 'Membership Alert',
+        // Mobile self check-in view
+        mobileCheckinSubtitle: 'Scan the QR at the gym to check in.',
+        mobileEnterId: 'Enter your Member ID',
+        mobileIdPlaceholder: 'Member ID',
+        mobileCheckinButton: 'Check In',
+        mobileOr: 'or',
+        mobileGoogleSignIn: 'Sign in with Google',
+        mobileLinkPrompt: 'No member is linked to this Google account yet. Enter your member ID once to link it.',
+        mobileLinkContinue: 'Link & Continue',
+        mobileUseIdInstead: 'Use member ID instead',
+        mobileWelcomeBack: 'Welcome back, ',
+        mobileWelcomeBackSuffix: '! Check in for your class below.',
+        mobileSwitchMember: 'Not you? Switch member',
+        mobileCheckinSuccessTitle: "You're checked in!",
+        mobileCheckinSuccessText: 'Enjoy your training.',
+        mobileCheckinAgain: 'Check In Again',
+        mobileAuthUnavailable: 'Firebase Auth is not available.',
+        mobileDomainUnauthorized: 'Domain not authorized for Google sign-in.',
+        mobileGoogleFailed: 'Google sign-in failed.',
+        mobileNoGoogleAccount: 'No Google account is signed in.',
+        mobileMemberIdNotFoundStaff: 'Member ID not found. Please try again or see staff.',
+        mobileMemberIdNotFound: 'Member ID not found.',
+        mobileAccountFrozenTitle: 'Account Frozen',
+        mobileAccountFrozenBody: 'Your account is frozen. Please see staff.',
+        mobileLinkNoEmail: 'No email provided.',
+        mobileLinkEmailMismatchPrefix: 'This member already has a different email linked (',
+        mobileLinkEmailMismatchSuffix: '). Ask staff to update it.',
+        mobileMemberRecordNotFound: 'Member record not found.',
         // Kiosk-specific headings
         gymSchedule: 'Gym Schedule',
         currentlyInside: 'Currently Inside',
@@ -209,12 +239,42 @@ App.KIOSK_I18N = {
         checkinOpenGymSummary: 'Δεν κάνετε κάποιο μάθημα σήμερα;',
         checkinOpenGymHint: 'Μπορείτε να κάνετε check-in για ελεύθερη προπόνηση χωρίς να επιλέξετε μάθημα.',
         checkinOpenGymButton: 'Check-in Χωρίς Μάθημα (Ελεύθερη Προπόνηση)',
+        checkinSelectAtLeastOne: 'Παρακαλώ επιλέξτε τουλάχιστον ένα μάθημα για να συνεχίσετε.',
         cancelButton: 'Ακύρωση',
         checkinConfirmButton: 'Επιβεβαίωση Check-In',
         kioskAlertExpired: 'Προσοχή: Η συνδρομή σας έχει λήξει ή δεν έχετε διαθέσιμες συνεδρίες. Παρακαλώ απευθυνθείτε στη γραμματεία.',
         kioskAlertSessions: 'Προσοχή: Έχετε χρησιμοποιήσει όλες τις συνεδρίες της συνδρομής σας. Παρακαλώ ανανεώστε.',
         kioskAlertExpiring: 'Σημείωση: Η συνδρομή σας λήγει σε ',
         kioskAlertExpiringDays: ' ημέρες.',
+        kioskAlertMembershipTitle: 'Ειδοποίηση Συνδρομής',
+        // Mobile self check-in view
+        mobileCheckinSubtitle: 'Σαρώστε το QR στο γυμναστήριο για να κάνετε check-in.',
+        mobileEnterId: 'Εισάγετε τον κωδικό μέλους σας',
+        mobileIdPlaceholder: 'Κωδικός Μέλους',
+        mobileCheckinButton: 'Check-in',
+        mobileOr: 'ή',
+        mobileGoogleSignIn: 'Σύνδεση με Google',
+        mobileLinkPrompt: 'Δεν υπάρχει μέλος συνδεδεμένο με αυτόν τον λογαριασμό Google. Εισάγετε μία φορά τον κωδικό μέλους σας για να τον συνδέσετε.',
+        mobileLinkContinue: 'Σύνδεση & Συνέχεια',
+        mobileUseIdInstead: 'Χρήση κωδικού μέλους αντί αυτού',
+        mobileWelcomeBack: 'Καλώς ήρθες ξανά, ',
+        mobileWelcomeBackSuffix: '! Κάντε check-in για το μάθημά σας παρακάτω.',
+        mobileSwitchMember: 'Δεν είστε εσείς; Αλλαγή μέλους',
+        mobileCheckinSuccessTitle: 'Έχετε κάνει check-in!',
+        mobileCheckinSuccessText: 'Καλή προπόνηση.',
+        mobileCheckinAgain: 'Check-in Ξανά',
+        mobileAuthUnavailable: 'Η Firebase Auth δεν είναι διαθέσιμη.',
+        mobileDomainUnauthorized: 'Ο τομέας δεν είναι εξουσιοδοτημένος για σύνδεση Google.',
+        mobileGoogleFailed: 'Η σύνδεση Google απέτυχε.',
+        mobileNoGoogleAccount: 'Δεν υπάρχει συνδεδεμένος λογαριασμός Google.',
+        mobileMemberIdNotFoundStaff: 'Ο κωδικός μέλους δεν βρέθηκε. Δοκιμάστε ξανά ή απευθυνθείτε στη γραμματεία.',
+        mobileMemberIdNotFound: 'Ο κωδικός μέλους δεν βρέθηκε.',
+        mobileAccountFrozenTitle: 'Παγωμένος Λογαριασμός',
+        mobileAccountFrozenBody: 'Ο λογαριασμός σας είναι παγωμένος. Απευθυνθείτε στη γραμματεία.',
+        mobileLinkNoEmail: 'Δεν παρέχεται email.',
+        mobileLinkEmailMismatchPrefix: 'Σε αυτό το μέλος έχει ήδη συνδεθεί διαφορετικό email (',
+        mobileLinkEmailMismatchSuffix: '). Ζητήστε από τη γραμματεία να το ενημερώσει.',
+        mobileMemberRecordNotFound: 'Δεν βρέθηκε το αρχείο του μέλους.',
         // Kiosk-specific headings
         gymSchedule: 'Πρόγραμμα Προπονήσεων',
         currentlyInside: 'Μέσα στο Γυμναστήριο',
@@ -405,6 +465,40 @@ App.applyKioskTranslations = function() {
                 });
             }
         } catch (e) { /* non-fatal */ }
+
+        // ---- Mobile self check-in view ----
+        const mobileTitle = document.getElementById('mobile-checkin-title');
+        if (mobileTitle) mobileTitle.innerText = map.memberCheckInTitle || 'Member Check-In';
+        const mobileSubtitle = document.getElementById('mobile-checkin-subtitle');
+        if (mobileSubtitle) mobileSubtitle.innerText = map.mobileCheckinSubtitle || 'Scan the QR at the gym to check in.';
+        const mobileEnterId = document.getElementById('mobile-checkin-enter-id');
+        if (mobileEnterId) mobileEnterId.innerText = map.mobileEnterId || 'Enter your Member ID';
+        const mobileIdInput = document.getElementById('mobile-checkin-id');
+        if (mobileIdInput) mobileIdInput.placeholder = map.mobileIdPlaceholder || 'Member ID';
+        const mobileLinkIdInput = document.getElementById('mobile-link-id');
+        if (mobileLinkIdInput) mobileLinkIdInput.placeholder = map.mobileIdPlaceholder || 'Member ID';
+        const mobileSubmitBtn = document.getElementById('mobile-checkin-submit-btn');
+        if (mobileSubmitBtn) mobileSubmitBtn.innerText = map.mobileCheckinButton || 'Check In';
+        const mobileGoBtn = document.getElementById('mobile-checkin-go-btn');
+        if (mobileGoBtn) mobileGoBtn.innerText = map.mobileCheckinButton || 'Check In';
+        const mobileOr = document.getElementById('mobile-checkin-or');
+        if (mobileOr) mobileOr.innerText = map.mobileOr || 'or';
+        const mobileGoogleText = document.getElementById('mobile-google-btn-text');
+        if (mobileGoogleText) mobileGoogleText.innerText = map.mobileGoogleSignIn || 'Sign in with Google';
+        const mobileLinkText = document.getElementById('mobile-checkin-link-text');
+        if (mobileLinkText) mobileLinkText.innerText = map.mobileLinkPrompt || 'No member is linked to this Google account yet. Enter your member ID once to link it.';
+        const mobileLinkBtn = document.getElementById('mobile-link-continue-btn');
+        if (mobileLinkBtn) mobileLinkBtn.innerText = map.mobileLinkContinue || 'Link & Continue';
+        const mobileUseIdBtn = document.getElementById('mobile-use-id-btn');
+        if (mobileUseIdBtn) mobileUseIdBtn.innerText = map.mobileUseIdInstead || 'Use member ID instead';
+        const mobileSwitchBtn = document.getElementById('mobile-switch-member-btn');
+        if (mobileSwitchBtn) mobileSwitchBtn.innerText = map.mobileSwitchMember || 'Not you? Switch member';
+        const mobileSuccessTitle = document.getElementById('mobile-checkin-success-title');
+        if (mobileSuccessTitle) mobileSuccessTitle.innerText = map.mobileCheckinSuccessTitle || "You're checked in!";
+        const mobileSuccessText = document.getElementById('mobile-checkin-success-text');
+        if (mobileSuccessText) mobileSuccessText.innerText = map.mobileCheckinSuccessText || 'Enjoy your training.';
+        const mobileAgainBtn = document.getElementById('mobile-checkin-again-btn');
+        if (mobileAgainBtn) mobileAgainBtn.innerText = map.mobileCheckinAgain || 'Check In Again';
 
     } catch (e) { console.warn('applyKioskTranslations error', e); }
 };

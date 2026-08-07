@@ -299,7 +299,10 @@ Object.assign(App, {
  
             confirmKioskClassSelection: (skipClassRequired = false) => {
                 if (!App.pendingCheckinMember) return App.closeModal('modal-checkin-classes');
-   
+
+                const lang = App.currentKioskLang || 'en';
+                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+
                 const allInputs = Array.from(document.querySelectorAll('#checkin-classes-content input[name="checkin-class"]'));
                 const selectedInputs = allInputs.filter(input => input.checked);
                 const selectedClasses = selectedInputs.map(input => ({
@@ -324,13 +327,11 @@ Object.assign(App, {
                 // Block only when classes were listed but every one is already checked in.
                 // When no classes are scheduled at all, allow the check-in to proceed as an open-gym visit.
                 if (allInputs.length > 0 && availableInputs.length === 0 && !skipClassRequired) {
-                    const lang = App.currentKioskLang || 'en';
-                    const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
                     return App.showKioskMessage(map.checkinAlreadyCheckedInText || 'You have already checked into all classes scheduled for today. Please ask staff for assistance.', 'warning');
                 }
    
                 if (availableSlotKeys.size > 0 && validSelections.length === 0 && !skipClassRequired) {
-                    return App.showKioskMessage('Please select at least one class to continue.', 'danger');
+                    return App.showKioskMessage(map.checkinSelectAtLeastOne || 'Please select at least one class to continue.', 'danger');
                 }
  
                 const member = App.pendingCheckinMember.member;
@@ -412,9 +413,9 @@ Object.assign(App, {
                     const lang = App.currentKioskLang || 'en';
                     const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
                     App.addNotification('Expired/Unpaid Member Check-in', `${member.firstName} ${member.lastName} checked in, but their visit is unpaid or they are out of sessions.`, 'danger', member.id);
-                    App.showKioskAlert('Membership Alert', membershipAlert || map.kioskAlertExpired || 'Attention: Your membership has expired or you are out of sessions. Please see staff.', 'var(--danger)');
+                    App.showKioskAlert(map.kioskAlertMembershipTitle || 'Membership Alert', membershipAlert || map.kioskAlertExpired || 'Attention: Your membership has expired or you are out of sessions. Please see staff.', 'var(--danger)');
                 } else if (membershipAlert) {
-                    App.showKioskAlert('Membership Notice', membershipAlert, 'var(--warning)');
+                    App.showKioskAlert(map.noticeTitle || 'Membership Notice', membershipAlert, 'var(--warning)');
                 }
 
                 App.renderLivePresent();
