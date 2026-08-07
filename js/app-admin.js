@@ -251,38 +251,43 @@ Object.assign(App, {
                     const nameHtml = isDeleted
                         ? `<strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong> <span class="text-gray">(${m.id})</span> <span class="badge badge-inactive" style="font-size:0.7rem;">Deleted Member</span>`
                         : `<strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong> <span class="text-gray">(${m.id})</span>`;
-                    let statusHtml = v.isUnpaid ? `<span class="badge badge-inactive">Unpaid Check-in</span>` : `<span class="badge badge-active">OK</span>`;
-
-                    // Payment attribution: for paid check-ins, show which recorded payment covers this visit
-                    let paymentHtml = '<span class="text-gray">—</span>';
+                    // Combined Status & Payment: unpaid check-ins show "Unpaid",
+                    // paid ones show the covering payment record that makes it OK
+                    let statusHtml = `<span class="badge badge-inactive">Unpaid</span>`;
                     if (!v.isUnpaid) {
                         const pay = App.getVisitPaidByInfo(v);
                         if (pay) {
                             const plan = pay.planId ? DB.getPlans().find(p => p.id === pay.planId) : null;
                             const planName = plan ? ` · ${Utils.escapeHTML(plan.name)}` : '';
                             const payLabel = `<span class="badge badge-active" style="font-size:0.7rem;">Paid</span> ${DB.getCurrency()}${parseFloat(pay.amount).toFixed(2)}${planName} <span class="text-gray" style="font-size:0.8rem;">(${Utils.formatDate(pay.date)})</span>`;
-                            paymentHtml = pay.note
+                            statusHtml = pay.note
                                 ? `<div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">${payLabel}</div><div class="text-gray" style="font-size:0.8rem;">${Utils.escapeHTML(pay.note)}</div>`
                                 : `<div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">${payLabel}</div>`;
                         } else {
-                            paymentHtml = `<span class="badge badge-active" style="font-size:0.7rem;">Paid</span> <span class="text-gray" style="font-size:0.8rem;">covered (no payment record)</span>`;
+                            statusHtml = `<span class="badge badge-active" style="font-size:0.7rem;">Paid</span> <span class="text-gray" style="font-size:0.8rem;">covered (no payment record)</span>`;
                         }
                     }
+
+                    // If a specific class was chosen at check-in (kiosk or admin portal), show the
+                    // class instead of the entry/exit times. Plain open-gym check-ins keep showing
+                    // their entry time and duration. buildVisitClassTags safely falls back to a
+                    // generic "Class" label if the class was later deleted from the schedule.
+                    const classTags = App.buildVisitClassTags(v);
+                    let entryHtml = classTags
+                        ? classTags
+                        : `<div>${Utils.formatTime(v.entryTime)} ${v.exitTime ? ` - ${Utils.formatTime(v.exitTime)}` : '(Inside)'}</div>
+                           <div class="text-gray" style="font-size:0.8rem;">${App.calcVisitDuration(v)}</div>`;
 
                     return `
                     <tr${isDeleted ? ' style="opacity:0.6;"' : ''}>
                         <td data-label="Date">${Utils.formatDate(v.entryTime)}</td>
                         <td data-label="Member Name">${nameHtml}</td>
                         <td data-label="Belt">${Utils.getBeltBadge(m.belt)}</td>
-                        <td data-label="Entry & Duration">
-                            <div>${Utils.formatTime(v.entryTime)} ${v.exitTime ? ` - ${Utils.formatTime(v.exitTime)}` : '(Inside)'}</div>
-                            <div class="text-gray" style="font-size:0.8rem;">${App.calcVisitDuration(v)}</div>
-                        </td>
-                        <td data-label="Status">${statusHtml}</td>
-                        <td data-label="Payment">${paymentHtml}</td>
+                        <td data-label="Entry & Class">${entryHtml}</td>
+                        <td data-label="Status & Payment">${statusHtml}</td>
                         <td data-label="Action" class="cell-actions"><button class="btn-outline btn-small" onclick="App.openVisitEditModal('${v.id}')">Edit</button></td>
                     </tr>
-                `}).join('') || '<tr><td colspan="7" class="text-center text-gray">No visits found matching filters.</td></tr>';
+                `}).join('') || '<tr><td colspan="6" class="text-center text-gray">No visits found matching filters.</td></tr>';
 
                 document.getElementById('visit-summary-grid').innerHTML = `
                     <div class="stat-card" style="padding: 1rem;"><h3>Filtered Total</h3><div class="value" style="font-size: 1.5rem;">${visits.length}</div></div>
