@@ -355,14 +355,8 @@
                                     <option value="name-desc">Name Z-A</option>
                                 </select>
                             </div>
-                            <div style="display:flex; align-items:center; padding-top: 1.5rem;">
-                                <label class="text-gray" style="display:flex; align-items:center; gap:0.4rem; cursor:pointer;">
-                                    <input type="checkbox" id="filter-visit-unpaid" onchange="App.renderVisitLog()">
-                                    <strong>Unpaid only</strong>
-                                </label>
-                            </div>
                             <div style="padding-top: 1.5rem;">
-                                <button class="btn-outline" onclick="document.getElementById('filter-visit-start').value=''; document.getElementById('filter-visit-end').value=''; document.getElementById('filter-visit-status').value='all'; document.getElementById('filter-visit-sort').value='newest'; document.getElementById('filter-visit-unpaid').checked=false; App.renderVisitLog();">Clear Filters</button>
+                                <button class="btn-outline" onclick="document.getElementById('filter-visit-start').value=''; document.getElementById('filter-visit-end').value=''; document.getElementById('filter-visit-status').value='all'; document.getElementById('filter-visit-sort').value='newest'; App.renderVisitLog();">Clear Filters</button>
                             </div>
                         </div>
                         
@@ -531,7 +525,7 @@
                     <div class="card" style="padding:0;">
                         <div class="table-responsive mobile-cards" style="border:none; border-radius: var(--border-radius);">
                             <table>
-                                <thead><tr><th>Plan Name</th><th>Validity (Days)</th><th>Sessions</th><th>Visible on Kiosk</th><th id="label-plan-price-th">Price</th><th style="width: 70px;">Drag</th></tr></thead>
+                                <thead><tr><th>Plan Name</th><th>Validity (Days)</th><th>Sessions</th><th>Public</th><th id="label-plan-price-th">Price</th><th style="width: 70px;">Action</th><th style="width: 70px;">Drag</th></tr></thead>
                                 <tbody id="plans-list"></tbody>
                             </table>
                         </div>
@@ -693,7 +687,7 @@
                     <div class="card" style="padding:0;">
                         <div class="table-responsive mobile-cards" style="border:none; border-radius: var(--border-radius);">
                             <table>
-                                <thead><tr><th>Class</th><th>Schedule</th><th>Visible on Kiosk</th><th style="width: 70px;">Drag</th></tr></thead>
+                                <thead><tr><th>Class</th><th>Schedule</th><th>Public</th><th style="width: 70px;">Action</th><th style="width: 70px;">Drag</th></tr></thead>
                                 <tbody id="schedule-classes-list"></tbody>
                             </table>
                         </div>
@@ -1153,9 +1147,19 @@
                         <input type="number" id="form-pay-amount" step="0.01" required placeholder="0.00">
                     </div>
                 </div>
-                
-                <label class="text-gray font-bold mt-1">Update Expiration To (Optional, modifies member status)</label>
-                <input type="date" id="form-pay-exp">
+                <div class="flex gap-2 mt-1" style="flex-wrap: wrap;">
+                    <div style="flex:1; min-width: 170px;">
+                        <label class="text-gray font-bold">Starting Date</label>
+                        <input type="date" id="form-pay-start" onchange="App.onPaymentStartChange()">
+                    </div>
+                    <div style="flex:1; min-width: 170px;">
+                        <label class="text-gray font-bold">Expiration Date</label>
+                        <input type="date" id="form-pay-exp" onchange="App.onPaymentExpChange()">
+                    </div>
+                </div>
+                <p class="text-gray" style="font-size: 0.85rem; margin: 0.25rem 0 0;">
+                    Starting and Expiration dates auto-fill from the selected plan. You can override them with custom dates anytime.
+                </p>
                 
                 <label class="text-gray font-bold mt-1">Note</label>
                 <input type="text" id="form-pay-note" placeholder="E.g., 6 Months Plan Cash">
@@ -1185,10 +1189,7 @@
 
     <div id="modal-checkin-classes" class="modal-overlay hidden">
         <div class="modal-content" style="max-width: 560px;">
-            <div class="flex justify-between align-center mb-1">
-                <h2 style="margin:0;">Select Classes</h2>
-            <button class="btn-outline" style="padding: 0.25rem 0.75rem;" onclick="App.cancelCheckinSelection()">✕</button>
-            </div>
+            <h2 style="margin:0;">Select Classes</h2>
             <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
             <div id="checkin-classes-content" style="max-height: 320px; overflow-y: auto;"></div>
             <div id="checkin-classes-open-menu" class="checkin-open-menu hidden"></div>

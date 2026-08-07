@@ -112,21 +112,21 @@ Object.assign(App, {
                                 <div class="color-swatch" style="background: ${p.color || '#2563eb'}; width: 16px; height: 16px;"></div>
                                 <div class="plan-name-cell"><strong>${Utils.escapeHTML(p.name)}</strong></div>
                                 <button class="btn-outline btn-small" onclick="App.togglePlanStar('${p.id}')" title="Featured" style="padding: 0.25rem 0.5rem; line-height: 1;">${p.starred ? '<span style="color:#f59e0b;">★</span>' : '<span style="color:#cbd5e1;">★</span>'}</button>
-                                <button class="btn-primary btn-small" onclick="App.editPlan('${p.id}')">Edit</button>
                             </div>
                         </td>
                         <td data-label="Validity (Days)">${p.days != null && p.days !== '' ? p.days : '-'}</td>
                         <td data-label="Sessions">${p.sessions ? p.sessions : 'Unlimited'}</td>
-                        <td data-label="Visible on Kiosk">
+                        <td data-label="Public">
                             <label class="closed-date-toggle" title="Visible on Member Kiosk">
                                 <input type="checkbox" ${p.isPublic !== false ? 'checked' : ''} onchange="App.togglePlanVisibility('${p.id}', this.checked)">
                                 <span class="closed-date-toggle-track"></span>
                             </label>
                         </td>
                         <td data-label="Price">${DB.getCurrency()}${parseFloat(p.price).toFixed(2)}</td>
+                        <td data-label="Action"><button class="btn-primary btn-small" onclick="App.editPlan('${p.id}')">Edit</button></td>
                         <td data-label="Drag" class="drag-handle-cell" title="Drag to reorder"><span class="drag-handle">⠿</span></td>
                     </tr>
-                `).join('') || '<tr><td colspan="6" class="text-center text-gray">No active plans found.</td></tr>';
+                `).join('') || '<tr><td colspan="7" class="text-center text-gray">No active plans found.</td></tr>';
                 
                 const select = document.getElementById('select-edit-plan');
                 select.innerHTML = '<option value="">-- Create New Plan --</option>' + plans.map(p => `<option value="${p.id}">${Utils.escapeHTML(p.name)}</option>`).join('');

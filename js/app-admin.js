@@ -100,8 +100,6 @@ Object.assign(App, {
                 document.getElementById('filter-visit-end').value = dateStr;
                 document.getElementById('filter-visit-status').value = 'all';
                 document.getElementById('filter-visit-sort').value = 'newest';
-                const unpaidToggle = document.getElementById('filter-visit-unpaid');
-                if (unpaidToggle) unpaidToggle.checked = false;
                 App.renderVisitLog();
             },
 
@@ -148,8 +146,7 @@ Object.assign(App, {
                 const binMembers = DB.getBin();
                 const startFilter = document.getElementById('filter-visit-start').value;
                 const endFilter = document.getElementById('filter-visit-end').value;
-                const unpaidOnly = document.getElementById('filter-visit-unpaid').checked;
-                const statusFilter = unpaidOnly ? 'unpaid' : document.getElementById('filter-visit-status').value;
+                const statusFilter = document.getElementById('filter-visit-status').value;
                 const sortBy = document.getElementById('filter-visit-sort').value;
 
                 if (startFilter) { const sd = new Date(startFilter); sd.setHours(0,0,0,0); visits = visits.filter(v => new Date(v.entryTime) >= sd); }

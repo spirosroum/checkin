@@ -68,8 +68,7 @@ Object.assign(App, {
             showMobileCheckinView: () => {
                 const remembered = App.getMobileSessionMember();
                 if (remembered) {
-                    // Return to the main check-in portal with the class chooser ready to go.
-                    App.showKioskCheckinPortal();
+                    // Stay on the mobile check-in page with the class chooser ready to go.
                     App.beginMobileCheckin(remembered);
                     return;
                 }
@@ -88,14 +87,12 @@ Object.assign(App, {
                 }
                 App.saveMobileSession(member.id);
                 input.value = '';
-                App.showKioskCheckinPortal();
                 App.beginMobileCheckin(member);
             },
 
             mobileCheckinGo: () => {
                 const member = App.getMobileSessionMember();
                 if (!member) { App.mobileCheckinSwitch(); return; }
-                App.showKioskCheckinPortal();
                 App.beginMobileCheckin(member);
             },
 
@@ -115,6 +112,9 @@ Object.assign(App, {
                     membershipAlert = 'Note: Your membership is about to end in ' + daysRemaining + ' days.';
                 }
                 App.pendingCheckinMember = { member, isUnpaidVisit, membershipAlert };
+                // Ensure the member stays on the mobile check-in page so cancelling the
+                // class chooser returns them to the check-in portal instead of the kiosk.
+                App.showMobileCheckinLanding();
                 App.openCheckinClassModal();
             },
 

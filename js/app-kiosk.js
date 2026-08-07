@@ -252,19 +252,19 @@ Object.assign(App, {
                     note.innerText = availableCount > 0 ? noteText : (map.checkinAlreadyCheckedInText || 'You have already checked into all classes scheduled for today. Please ask staff for assistance.');
                 }
 
-                // Hidden menu: allow checking in without choosing a class (open gym), shown only when there are classes to pick from.
+                // Hidden menu: allow checking in without choosing a class (open gym),
+                // shown both when there are classes to pick from and when none are scheduled.
                 const openMenu = document.getElementById('checkin-classes-open-menu');
                 if (openMenu) {
-                    const showMenu = todaySlotEntries.length > 0;
-                    openMenu.classList.toggle('hidden', !showMenu);
-                    openMenu.innerHTML = showMenu ? `
+                    openMenu.classList.remove('hidden');
+                    openMenu.innerHTML = `
                         <details class="checkin-open-details">
                             <summary class="checkin-open-summary">${Utils.escapeHTML(openGymSummary)}</summary>
                             <div class="checkin-open-body">
                                 <p class="text-gray">${Utils.escapeHTML(openGymHint)}</p>
                                 <button class="btn-outline w-full" style="font-weight:600;" onclick="App.confirmCheckin(true)">${Utils.escapeHTML(openGymButton)}</button>
                             </div>
-                        </details>` : '';
+                        </details>`;
                 }
    
                 App.openModal('modal-checkin-classes');
@@ -321,7 +321,9 @@ Object.assign(App, {
                     }
                 });
                 const availableInputs = allInputs.filter(input => !input.disabled);
-                if (availableInputs.length === 0 && !skipClassRequired) {
+                // Block only when classes were listed but every one is already checked in.
+                // When no classes are scheduled at all, allow the check-in to proceed as an open-gym visit.
+                if (allInputs.length > 0 && availableInputs.length === 0 && !skipClassRequired) {
                     const lang = App.currentKioskLang || 'en';
                     const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
                     return App.showKioskMessage(map.checkinAlreadyCheckedInText || 'You have already checked into all classes scheduled for today. Please ask staff for assistance.', 'warning');
@@ -564,13 +566,16 @@ Object.assign(App, {
 
             leaderboardRankCell: (rank) => {
                 const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
-                const medalClass = rank === 1 ? 'kiosk-lb-rank--gold' : rank === 2 ? 'kiosk-lb-rank--silver' : rank === 3 ? 'kiosk-lb-rank--bronze' : '';
-                return `<span class="kiosk-lb-rank-num ${medalClass}">${medal}<span>${rank}</span></span>`;
+                return `<span class="kiosk-lb-rank-num">${medal}<span>${rank}</span></span>`;
             },
 
             renderKioskLeaderboard: () => {
                 const standings = App.getLeaderboardStandings();
-                const top = standings.slice(0, 10);
+                let top = standings.slice(0, 10);
+                if (top.length > 0) {
+                    const lastRank = top[top.length - 1].rank;
+                    top = top.concat(standings.slice(10).filter(entry => entry.rank === lastRank));
+                }
                 const container = document.getElementById('kiosk-leaderboard-container');
                 if (!container) return;
                 const lang = App.currentKioskLang || 'en';
@@ -581,29 +586,32 @@ Object.assign(App, {
                     return;
                 }
 
+                const groups = [];
+                top.forEach(entry => {
+                    const last = groups[groups.length - 1];
+                    if (last && last.rank === entry.rank) {
+                        last.members.push(entry);
+                    } else {
+                        groups.push({ rank: entry.rank, members: [entry] });
+                    }
+                });
+
                 container.innerHTML = `
-                    <div class="table-responsive kiosk-leaderboard-wrap" style="border:none;">
-                        <table class="kiosk-leaderboard-table">
-                            <thead>
-                                <tr>
-                                    <th class="kiosk-lb-rank-col">${Utils.escapeHTML(map.leaderboardRankColumn || 'Rank')}</th>
-                                    <th class="kiosk-lb-member-col">${Utils.escapeHTML(map.leaderboardMemberColumn || 'Member')}</th>
-                                    <th>${Utils.escapeHTML(map.leaderboardBeltColumn || 'Belt')}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${top.map(entry => `
-                                    <tr class="kiosk-lb-row${entry.rank <= 3 ? ' kiosk-lb-row--podium' : ''}">
-                                        <td class="kiosk-lb-rank">${App.leaderboardRankCell(entry.rank)}</td>
-                                        <td class="kiosk-lb-member">
+                    <div class="kiosk-leaderboard">
+                        ${groups.map(group => `
+                            <div class="kiosk-lb-card">
+                                <div class="kiosk-lb-rank">${App.leaderboardRankCell(group.rank)}</div>
+                                <div class="kiosk-lb-members">
+                                    ${group.members.map(entry => `
+                                        <div class="kiosk-lb-member-row">
                                             <strong class="kiosk-lb-name">${Utils.escapeHTML(entry.member.firstName)} ${Utils.escapeHTML(entry.member.lastName)}</strong>
-                                            <span class="kiosk-lb-count-badge">${entry.count} ${Utils.escapeHTML(map.leaderboardSessionsColumn || 'Trainings')}</span>
-                                        </td>
-                                        <td>${Utils.getBeltBadge(entry.member.belt)}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
+                                            <span class="kiosk-lb-count-badge">${entry.count}</span>
+                                            <span class="kiosk-lb-belt">${Utils.getBeltBadge(entry.member.belt)}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
                     </div>
                 `;
             },

@@ -202,20 +202,15 @@
         .belt-kids { background: #f59e0b; color: #ffffff; border-color: #b45309; }
 
         /* Kiosk "Most Trainings" leaderboard */
-        .kiosk-leaderboard-wrap { -webkit-overflow-scrolling: touch; }
-        .kiosk-leaderboard-table { min-width: 440px; margin-bottom: 0; }
-        .kiosk-leaderboard-table th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray); padding: 0.65rem 0.9rem; }
-        .kiosk-leaderboard-table td { padding: 0.7rem 0.9rem; white-space: nowrap; }
-        .kiosk-lb-rank { text-align: left; }
+        .kiosk-leaderboard { display: flex; flex-direction: column; gap: 0.6rem; }
+        .kiosk-lb-card { display: flex; align-items: stretch; gap: 0.75rem; background: var(--white); border: 1px solid var(--gray-light); border-radius: 10px; padding: 0.6rem 0.75rem; }
+        .kiosk-lb-rank { display: flex; align-items: center; flex-shrink: 0; }
         .kiosk-lb-rank-num { display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; min-width: 42px; padding: 0.25rem 0.6rem; border-radius: 8px; background: #f1f5f9; color: var(--dark); font-weight: 800; font-size: 0.95rem; line-height: 1.2; }
-        .kiosk-lb-rank-num.kiosk-lb-rank--gold { background: #fef3c7; color: #92400e; }
-        .kiosk-lb-rank-num.kiosk-lb-rank--silver { background: #e2e8f0; color: #334155; }
-        .kiosk-lb-rank-num.kiosk-lb-rank--bronze { background: #fed7aa; color: #7c2d12; }
-        .kiosk-lb-member { display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; white-space: normal; }
-        .kiosk-lb-name { font-size: 1rem; color: var(--dark); overflow-wrap: anywhere; word-break: break-word; }
-        .kiosk-lb-count-badge { display: inline-block; min-width: 38px; text-align: center; padding: 0.25rem 0.7rem; border-radius: 999px; background: #eef2ff; color: #1e3a8a; font-weight: 800; font-size: 0.85rem; line-height: 1.2; }
-        .kiosk-lb-row--podium td { background: #fffbeb; }
-        .kiosk-lb-row--podium:hover td { background: #fef9c3; }
+        .kiosk-lb-members { flex: 1; display: flex; flex-direction: column; gap: 0.45rem; min-width: 0; }
+        .kiosk-lb-member-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+        .kiosk-lb-name { font-weight: 700; font-size: 1rem; color: var(--dark); flex: 1; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+        .kiosk-lb-count-badge { flex-shrink: 0; display: inline-block; min-width: 34px; text-align: center; padding: 0.25rem 0.6rem; border-radius: 999px; background: #eef2ff; color: #1e3a8a; font-weight: 800; font-size: 0.85rem; line-height: 1.2; }
+        .kiosk-lb-belt { flex-shrink: 0; }
 
         /* Layouts */
         .app-container { min-height: 100vh; display: flex; position: relative; }
@@ -404,9 +399,6 @@
         .kiosk-present-name { font-weight: 600; font-size: 1.1rem; color: var(--dark); }
         .admin-present-name-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; white-space: normal; min-width: 0; }
         .admin-present-name-cell .kiosk-class-tag { white-space: normal; }
-
-        /* Kiosk leaderboard: allow horizontal scroll on phones while keeping names readable */
-        .kiosk-leaderboard-wrap { max-width: 100%; }
 
         /* Drag-to-reorder rows */
         tr[draggable="true"] { cursor: grab; user-select: none; }

@@ -4,10 +4,15 @@
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
+// Tracks whether the admin has manually overridden the auto-computed
+// expiration date in the payment modal. A plan/start-date change resets it.
+let paymentExpManualOverride = false;
+
 Object.assign(App, {
             openPaymentModal: (presetMemberId = null, paymentId = null) => {
                 const form = document.getElementById('payment-form');
                 form.reset();
+                paymentExpManualOverride = false;
                 
                 // Populate member dropdown
                 const memSelect = document.getElementById('form-pay-member');
@@ -20,7 +25,9 @@ Object.assign(App, {
 
                 if (presetMemberId) memSelect.value = presetMemberId;
                 
-                document.getElementById('form-pay-date').value = new Date().toISOString().split('T')[0];
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('form-pay-date').value = today;
+                document.getElementById('form-pay-start').value = today;
                 document.getElementById('btn-delete-payment').classList.add('hidden');
                 document.getElementById('form-pay-id').value = '';
 
@@ -31,6 +38,7 @@ Object.assign(App, {
                         document.getElementById('form-pay-id').value = pay.id;
                         memSelect.value = pay.memberId;
                         document.getElementById('form-pay-date').value = pay.date;
+                        document.getElementById('form-pay-start').value = pay.appliedStartDate || pay.date;
                         document.getElementById('form-pay-amount').value = pay.amount;
                         document.getElementById('form-pay-note').value = pay.note || '';
                         if (pay.planId) {
@@ -38,6 +46,7 @@ Object.assign(App, {
                         }
                         if (pay.appliedExpiration) {
                             document.getElementById('form-pay-exp').value = pay.appliedExpiration;
+                            paymentExpManualOverride = true;
                         }
                         document.getElementById('btn-delete-payment').classList.remove('hidden');
                     }
@@ -56,44 +65,82 @@ Object.assign(App, {
                 if (selectedOption.value) {
                     document.getElementById('form-pay-amount').value = selectedOption.getAttribute('data-price');
                     document.getElementById('form-pay-note').value = 'Payment for Plan: ' + selectedOption.innerText.split('-')[0].trim();
-                    App.onPaymentMemberOrPlanChange();
                 } else {
                     document.getElementById('form-pay-exp').value = '';
                 }
+                // Selecting a plan drives the auto-computed starting/expiration dates
+                paymentExpManualOverride = false;
+                App.computePaymentDates();
+                App.renderPaymentUnpaidSummary();
             },
 
             /**
-             * Event handler triggered when member, plan, or date selection changes in the payment modal.
-             * Computes projected membership expiration date if the selected plan has a validity window in days.
+             * Event handler triggered when member, plan, or payment date selection changes
+             * in the payment modal. Recomputes the projected starting & expiration dates.
              */
             onPaymentMemberOrPlanChange: () => {
+                App.computePaymentDates();
+                App.renderPaymentUnpaidSummary();
+            },
+
+            /**
+             * Event handler triggered when the Starting Date changes.
+             * The starting date drives the expiration date while a plan is selected.
+             */
+            onPaymentStartChange: () => {
+                paymentExpManualOverride = false;
+                App.computePaymentDates();
+            },
+
+            /**
+             * Event handler triggered when the Expiration Date changes.
+             * Marks the field as manually overridden so later member/payment-date
+             * changes don't overwrite the admin's custom expiration.
+             */
+            onPaymentExpChange: () => {
+                paymentExpManualOverride = true;
+            },
+
+            /**
+             * Core auto-connect logic for the payment modal dates.
+             *
+             * HOW & WHY:
+             * 1. When a plan is selected, the Starting Date defaults to the payment date —
+             *    or stacks onto the member's current unexpired expiration for seamless renewals.
+             * 2. The Expiration Date auto-fills as Starting Date + plan validity window.
+             * 3. Admins can override either date with custom values; a manual expiration is
+             *    preserved until the plan or starting date changes again.
+             */
+            computePaymentDates: () => {
                 const planSelect = document.getElementById('form-pay-plan');
                 const selectedOption = planSelect.options[planSelect.selectedIndex];
-                const dateVal = document.getElementById('form-pay-date').value;
                 const mId = document.getElementById('form-pay-member').value;
- 
-                if (selectedOption.value && dateVal && mId) {
-                    const days = selectedOption.getAttribute('data-days');
-                    const expInput = document.getElementById('form-pay-exp');
-                     
-                    const members = DB.getMembers();
-                    const member = members.find(m => m.id === mId);
-                     
-                    // Calculate start date: stack onto existing unexpired plan if valid
-                    let calcStart = dateVal;
-                    if (member && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) {
-                        const curExpDate = new Date(member.expirationDate);
-                        const payDate = new Date(dateVal);
-                        if (curExpDate > payDate) {
-                            calcStart = member.expirationDate;
-                        }
-                    }
-                     
-                    if (days) {
-                        expInput.value = Utils.calculateExpirationDate(calcStart, days);
+                const payDate = document.getElementById('form-pay-date').value;
+                const startInput = document.getElementById('form-pay-start');
+                const expInput = document.getElementById('form-pay-exp');
+
+                if (!selectedOption || !selectedOption.value) return;
+
+                const days = selectedOption.getAttribute('data-days');
+                const member = DB.getMembers().find(m => m.id === mId);
+
+                // Starting date: keep the admin's value, otherwise default to the payment
+                // date — stacking onto an active unexpired membership when it ends later.
+                let startVal = startInput.value || payDate;
+                if (!startInput.value && member && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) {
+                    const curExp = new Date(member.expirationDate);
+                    const payDateObj = new Date(payDate);
+                    if (curExp > payDateObj) {
+                        startVal = member.expirationDate;
                     }
                 }
-                App.renderPaymentUnpaidSummary();
+                startInput.value = startVal;
+
+                // Expiration date: auto-connect from starting date + plan duration,
+                // unless the admin manually overrode the expiration.
+                if (days && !paymentExpManualOverride) {
+                    expInput.value = Utils.calculateExpirationDate(startVal, days);
+                }
             },
  
             /**
@@ -273,15 +320,15 @@ Object.assign(App, {
                 } else if (!planId) {
                     clearedVisitIds = DB.getVisits().filter(v => v.memberId === memberId && v.isUnpaid).map(v => v.id);
                 } else {
-                    const formPayDate = document.getElementById('form-pay-date').value;
+                    const formPayStart = document.getElementById('form-pay-start').value || document.getElementById('form-pay-date').value;
                     const formPayExp = document.getElementById('form-pay-exp').value;
                     clearedVisitIds = DB.getVisits().filter(v => {
                         if (v.memberId !== memberId || !v.isUnpaid) return false;
                         let coversVisit = true;
-                        if (formPayDate) {
+                        if (formPayStart) {
                             const visitDateObj = new Date(v.entryTime);
                             const visitYMD = visitDateObj.getFullYear() + '-' + String(visitDateObj.getMonth()+1).padStart(2,'0') + '-' + String(visitDateObj.getDate()).padStart(2,'0');
-                            if (visitYMD < formPayDate) coversVisit = false;
+                            if (visitYMD < formPayStart) coversVisit = false;
                             if (formPayExp && visitYMD > formPayExp) coversVisit = false;
                         }
                         return coversVisit;
@@ -297,7 +344,7 @@ Object.assign(App, {
                     planId: planId || (originalPayment ? originalPayment.planId : null),
                     sessionsGranted: sessionsGranted !== null ? sessionsGranted : (originalPayment ? originalPayment.sessionsGranted : null),
                     appliedExpiration: newExp || null,
-                    appliedStartDate: document.getElementById('form-pay-date').value,
+                    appliedStartDate: document.getElementById('form-pay-start').value || document.getElementById('form-pay-date').value,
                     prevExpiration: prevExp || null,
                     clearedVisitIds
                 };

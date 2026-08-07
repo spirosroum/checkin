@@ -232,20 +232,20 @@ Object.assign(App, {
                             <div class="flex align-center gap-1" style="flex-wrap: wrap;">
                                 <div class="color-swatch" style="background: ${color}; width: 16px; height: 16px;"></div>
                                 <div class="plan-name-cell"><strong>${Utils.escapeHTML(cls.name)}</strong></div>
-                                <button class="btn-primary btn-small" onclick="App.editScheduleClass('${cls.id}')">Edit</button>
                             </div>
                         </td>
                         <td data-label="Schedule" style="white-space: normal;">${slotSummary}</td>
-                        <td data-label="Visible on Kiosk">
+                        <td data-label="Public">
                             <label class="closed-date-toggle" title="Visible on Kiosk">
                                 <input type="checkbox" ${cls.isPublic !== false ? 'checked' : ''} onchange="App.toggleClassVisibility('${cls.id}', this.checked)">
                                 <span class="closed-date-toggle-track"></span>
                             </label>
                         </td>
+                        <td data-label="Action"><button class="btn-primary btn-small" onclick="App.editScheduleClass('${cls.id}')">Edit</button></td>
                         <td data-label="Drag" class="drag-handle-cell" title="Drag to reorder"><span class="drag-handle">⠿</span></td>
                     </tr>
                     `;
-                }).join('') || '<tr><td colspan="4" class="text-center text-gray">No classes found. Add a class to get started.</td></tr>';
+                }).join('') || '<tr><td colspan="5" class="text-center text-gray">No classes found. Add a class to get started.</td></tr>';
             },
 
             toggleClassVisibility: (id, visible) => {
