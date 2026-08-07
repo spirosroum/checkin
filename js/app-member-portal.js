@@ -12,16 +12,109 @@ Object.assign(App, {
                 if (overlay) overlay.classList.toggle('open');
             },
 
-            loginAsMember: () => {
-                const input = document.getElementById('member-login-id');
-                const id = input.value.trim();
-                if (!id) return;
-                const member = DB.getMembers().find(m => m.id === id);
-                if (!member) return alert("Member ID not found.");
-                
+            // ---------- MEMBER GOOGLE SIGN-IN ----------
+            // Members link their Google account to their member record via the
+            // existing "email" field. Resolution is case-insensitive.
+
+            // The member record whose email matches the signed-in Google account (if any).
+            getMemberByFirebaseEmail: () => {
+                const auth = getAuth();
+                if (!auth || !auth.currentUser) return null;
+                const email = (auth.currentUser.email || '').trim().toLowerCase();
+                if (!email) return null;
+                return DB.getMembers().find(m => (m.email || '').trim().toLowerCase() === email) || null;
+            },
+
+            // Whether the current device should use the redirect flow (mobile Safari
+            // frequently blocks popups) instead of a popup.
+            isTouchDevice: () => {
+                return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+            },
+
+            // Set the active member session (member view + mobile check-in).
+            setMemberSession: (member) => {
                 App.currentUser = member;
                 localStorage.setItem('gym_member_session', member.id);
                 App.isMobileCheckinMode = false;
+            },
+
+            // Bind a Google email to a member record. Returns {error} or {ok}.
+            linkGoogleEmailToMember: (member, email) => {
+                const norm = (email || '').trim();
+                if (!norm) return { error: 'No email provided.' };
+                const existing = (member.email || '').trim().toLowerCase();
+                const incoming = norm.toLowerCase();
+                if (existing && existing !== incoming) {
+                    return { error: 'This member already has a different email linked (' + member.email + '). Ask staff to update it.' };
+                }
+                if (existing === incoming) return { ok: true };
+                const members = DB.getMembers();
+                const idx = members.findIndex(m => m.id === member.id);
+                if (idx === -1) return { error: 'Member record not found.' };
+                members[idx].email = norm;
+                DB.saveMembers(members);
+                member.email = norm;
+                return { ok: true };
+            },
+
+            // Show the member dashboard view for a resolved member.
+            showMemberDashboardFor: (member) => {
+                App.closeModal('modal-login');
+                document.getElementById('view-kiosk').classList.add('hidden');
+                const adminView = document.getElementById('view-admin');
+                if (adminView) adminView.classList.add('hidden');
+                document.getElementById('view-member').classList.remove('hidden');
+                App.renderMemberDashboard();
+            },
+
+            // "Sign in with Google" button in the login modal (Member Dashboard section).
+            memberGoogleLogin: () => {
+                const auth = getAuth();
+                if (!auth) return alert('Firebase Auth is not available.');
+                const provider = new firebase.auth.GoogleAuthProvider();
+                const finish = () => {
+                    const member = App.getMemberByFirebaseEmail();
+                    if (member) {
+                        App.setMemberSession(member);
+                        App.showMemberDashboardFor(member);
+                    } else {
+                        alert('No member is linked to this Google account yet. Enter your member ID once to link it (or ask staff to add your email).');
+                        document.getElementById('member-login-id').focus();
+                    }
+                };
+                const fail = (err) => {
+                    if (!err) return;
+                    if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
+                    if (err.code === 'auth/unauthorized-domain') return alert('This domain is not authorized for Google sign-in. Add it in Firebase Console -> Authentication -> Settings -> Authorized domains.');
+                    alert(err.message || 'Google sign-in failed. Please try again.');
+                };
+                if (App.isTouchDevice()) {
+                    auth.signInWithRedirect(provider).catch(fail);
+                } else {
+                    auth.signInWithPopup(provider).then(finish).catch(fail);
+                }
+            },
+
+            loginAsMember: () => {
+                const input = document.getElementById('member-login-id');
+                const id = input.value.trim();
+                let member = null;
+                if (id) {
+                    member = DB.getMembers().find(m => m.id === id);
+                    if (!member) return alert("Member ID not found.");
+                } else {
+                    // Empty ID: if a Google account is signed in, resolve by email
+                    // (useful after a mobile redirect sign-in, or on reload).
+                    member = App.getMemberByFirebaseEmail();
+                    if (!member) return;
+                }
+                // If a Google account is signed in, link it to this member (one-time).
+                const auth = getAuth();
+                if (auth && auth.currentUser && auth.currentUser.email) {
+                    const linkResult = App.linkGoogleEmailToMember(member, auth.currentUser.email);
+                    if (linkResult.error) return alert(linkResult.error);
+                }
+                App.setMemberSession(member);
                 App.closeModal('modal-login');
                 document.getElementById('view-kiosk').classList.add('hidden');
                 const adminView = document.getElementById('view-admin');
