@@ -213,13 +213,24 @@ Object.assign(App, {
                 
                 container.innerHTML = App.columnsConfig.map((col, idx) => `
                     <label draggable="true" ondragstart="App.dragStart(${idx})" ondragover="App.dragOver(event)" ondrop="App.drop(${idx})" ondragenter="event.preventDefault()">
+                        <button type="button" class="column-move-btn" onclick="event.preventDefault(); App.moveColumn(${idx}, -1)" aria-label="Move ${Utils.escapeHTML(col.label)} up" ${idx === 0 ? 'disabled' : ''}>↑</button>
                         <input type="checkbox" ${col.checked ? 'checked' : ''} onchange="App.toggleColumn(${idx}, this.checked)"> ${col.label}
+                        <button type="button" class="column-move-btn" onclick="event.preventDefault(); App.moveColumn(${idx}, 1)" aria-label="Move ${Utils.escapeHTML(col.label)} down" ${idx === App.columnsConfig.length - 1 ? 'disabled' : ''}>↓</button>
                     </label>
                 `).join('');
             },
 
             toggleColumn: (idx, isChecked) => {
                 App.columnsConfig[idx].checked = isChecked;
+                App.renderMemberDirectory();
+            },
+
+            moveColumn: (idx, direction) => {
+                const targetIdx = idx + direction;
+                if (targetIdx < 0 || targetIdx >= App.columnsConfig.length) return;
+                const item = App.columnsConfig.splice(idx, 1)[0];
+                App.columnsConfig.splice(targetIdx, 0, item);
+                App.renderColumnConfigurator();
                 App.renderMemberDirectory();
             },
 
@@ -291,7 +302,7 @@ Object.assign(App, {
             openExportModal: () => {
                 const container = document.getElementById('export-fields-container');
                 container.innerHTML = App.exportFields.map((f, i) => `
-                    <label style="display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.85rem; background: ${f.checked ? '#dbeafe' : 'var(--gray-light)'}; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 0.9rem; transition: 0.2s; border: 2px solid ${f.checked ? 'var(--primary)' : 'transparent'}; user-select: none;">
+                    <label style="display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.85rem; background: ${f.checked ? 'var(--bg-info-soft)' : 'var(--gray-light)'}; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 0.9rem; transition: 0.2s; border: 2px solid ${f.checked ? 'var(--primary)' : 'transparent'}; user-select: none;">
                         <input type="checkbox" ${f.checked ? 'checked' : ''} onchange="App.toggleExportField(${i}, this.checked)" style="display:none;">
                         <span style="color: ${f.checked ? 'var(--primary)' : 'var(--dark)'};">${f.label}</span>
                     </label>
@@ -414,7 +425,7 @@ Object.assign(App, {
                         document.getElementById('admin-member-payments-wrapper').classList.remove('hidden');
                         
                         const expInput = document.getElementById('form-expiration');
-                        expInput.style.backgroundColor = (Utils.getDaysRemaining(m.expirationDate) < 0) ? '#fee2e2' : '#dcfce7';
+                        expInput.style.backgroundColor = (Utils.getDaysRemaining(m.expirationDate) < 0) ? 'var(--bg-danger-soft)' : 'var(--bg-success-soft)';
 
                         if(m.sessionsTotal) {
                             document.getElementById('member-sessions-wrapper').style.display = 'flex';
@@ -447,7 +458,7 @@ Object.assign(App, {
                     document.getElementById('modal-title').innerText = 'Register New Member';
                     document.getElementById('form-member-id').value = App.generateRandomId();
                     document.getElementById('form-start-date').value = Utils.todayLocalIso();
-                    document.getElementById('form-expiration').style.backgroundColor = '#fff';
+                    document.getElementById('form-expiration').style.backgroundColor = 'var(--white)';
                     document.getElementById('member-unpaid-warning').innerHTML = '';
                     document.getElementById('member-sessions-wrapper').style.display = 'none';
                     // Default new registrations to Inactive so they cannot check in until staff activates / applies a plan
@@ -472,7 +483,7 @@ Object.assign(App, {
                 const plan = DB.getPlans().find(p => p.id === planId);
                 if (plan && start) {
                     expInput.value = Utils.calculateExpirationDate(start, plan.days);
-                    expInput.style.backgroundColor = '#dbeafe';
+                    expInput.style.backgroundColor = 'var(--bg-info-soft)';
                     payInput.value = parseFloat(plan.price).toFixed(2);
 
                     if (plan.sessions) {
@@ -487,11 +498,11 @@ Object.assign(App, {
 
             updateBeltColor: (selectEl) => {
                 const colors = {
-                    'White': {bg: '#ffffff', text: '#1e293b'},
-                    'Blue': {bg: '#1d4ed8', text: '#ffffff'},
-                    'Purple': {bg: '#6b21a8', text: '#ffffff'},
-                    'Brown': {bg: '#78350f', text: '#ffffff'},
-                    'Black': {bg: '#0f172a', text: '#ffffff'}
+                    'White': {bg: 'var(--white)', text: 'var(--dark-panel)'},
+                    'Blue': {bg: 'var(--primary-hover)', text: 'var(--white)'},
+                    'Purple': {bg: '#6b21a8', text: 'var(--white)'},
+                    'Brown': {bg: '#78350f', text: 'var(--white)'},
+                    'Black': {bg: 'var(--dark)', text: 'var(--white)'}
                 };
                 const val = selectEl.value;
                 if(colors[val]) {

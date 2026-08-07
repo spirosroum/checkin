@@ -220,17 +220,67 @@ Object.assign(App, {
             },
 
             openModal: (id) => {
-                document.getElementById(id).classList.remove('hidden');
+                const modal = document.getElementById(id);
+                if (!modal) return;
+                modal.classList.remove('hidden');
                 document.body.style.overflow = 'hidden';
+                modal.setAttribute('role', 'dialog');
+                modal.setAttribute('aria-modal', 'true');
+                const titleEl = modal.querySelector('h1, h2, h3');
+                modal.setAttribute('aria-label', modal.getAttribute('data-title') || (titleEl && titleEl.textContent.trim()) || id);
+                if (!App._modalStack) App._modalStack = [];
+                App._modalStack.push({ id, prevFocus: document.activeElement });
+                if (!App._modalKeydownBound) {
+                    App._modalKeydownBound = true;
+                    document.addEventListener('keydown', App._onModalKeydown);
+                }
+                const focusables = Array.from(modal.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+                if (focusables.length) focusables[0].focus();
             },
             closeModal: (id) => {
-                document.getElementById(id).classList.add('hidden');
+                const modal = document.getElementById(id);
+                if (!modal) return;
+                modal.classList.add('hidden');
+                modal.removeAttribute('role');
+                modal.removeAttribute('aria-modal');
                 if(id === 'modal-login') {
                     document.getElementById('admin-login-pwd').value = '';
                     document.getElementById('admin-login-email').value = '';
                 }
                 const anyModalOpen = Array.from(document.querySelectorAll('.modal-overlay')).some(m => !m.classList.contains('hidden'));
                 if (!anyModalOpen) document.body.style.overflow = '';
+                let prevFocus = null;
+                if (App._modalStack) {
+                    const idx = App._modalStack.map(entry => entry.id).lastIndexOf(id);
+                    if (idx !== -1) prevFocus = App._modalStack.splice(idx, 1)[0].prevFocus;
+                }
+                if (prevFocus && document.contains(prevFocus)) {
+                    const topEntry = App._modalStack && App._modalStack.length ? App._modalStack[App._modalStack.length - 1] : null;
+                    const topModal = topEntry ? document.getElementById(topEntry.id) : null;
+                    if (!topModal || topModal.contains(prevFocus) || !prevFocus.closest('.modal-overlay')) {
+                        prevFocus.focus({ preventScroll: true });
+                    }
+                }
+            },
+
+            _onModalKeydown: (e) => {
+                if (!App._modalStack || App._modalStack.length === 0) return;
+                const top = App._modalStack[App._modalStack.length - 1];
+                const modal = document.getElementById(top.id);
+                if (!modal || modal.classList.contains('hidden')) return;
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    App.closeModal(top.id);
+                    return;
+                }
+                if (e.key !== 'Tab') return;
+                const focusables = Array.from(modal.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+                if (focusables.length === 0) { e.preventDefault(); return; }
+                const first = focusables[0];
+                const last = focusables[focusables.length - 1];
+                const active = document.activeElement;
+                if (e.shiftKey && (active === first || !modal.contains(active))) { e.preventDefault(); last.focus(); }
+                else if (!e.shiftKey && (active === last || !modal.contains(active))) { e.preventDefault(); first.focus(); }
             },
 
             navigate: (targetPane) => {
@@ -350,5 +400,20 @@ Object.assign(App, {
                         alert(msg);
                     });
             },
-            
+
 });
+
+(() => {
+    const syncDrawerAria = (el) => {
+        el.setAttribute('aria-hidden', el.classList.contains('open') ? 'false' : 'true');
+    };
+    const drawerObserver = new MutationObserver(muts => {
+        muts.forEach(mut => {
+            if (mut.type === 'attributes' && mut.attributeName === 'class') syncDrawerAria(mut.target);
+        });
+    });
+    document.querySelectorAll('.portal-drawer, .portal-drawer-overlay').forEach(el => {
+        syncDrawerAria(el);
+        drawerObserver.observe(el, { attributes: true, attributeFilter: ['class'] });
+    });
+})();

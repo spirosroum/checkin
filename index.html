@@ -80,7 +80,7 @@
             </div>
             
             <div class="card" style="grid-column: 1 / -1; padding: 0; overflow: hidden; border: 1px solid var(--gray-light);">
-                <div style="padding: 1.5rem 1.5rem 1rem 1.5rem; border-bottom: 1px solid var(--gray-light); background: #f8fafc;">
+                <div style="padding: 1.5rem 1.5rem 1rem 1.5rem; border-bottom: 1px solid var(--gray-light); background: var(--light);">
                     <h3 style="font-size: 1.5rem; margin:0;">Gym Schedule</h3>
                 </div>
                 <!-- FIXED SCHEDULE SCROLLABLE CONTAINER -->
@@ -275,7 +275,7 @@
                             <button class="btn-outline" onclick="App.copyCheckinQRUrl()">Copy URL</button>
                         </div>
                         <div class="flex justify-center" style="margin-top: 1rem;">
-                            <div id="checkin-qr-container" style="background: #fff; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--gray-light);"></div>
+                            <div id="checkin-qr-container" style="background: var(--white); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--gray-light);"></div>
                         </div>
                         <p id="checkin-qr-hint" class="text-gray" style="font-size: 0.85rem; text-align: center; margin-top: 0.5rem;">First-time members enter their Member ID once; afterwards their phone remembers them.</p>
                         <button class="btn-outline w-full" style="font-weight:600;" onclick="App.printCheckinQR()">🖨 Print QR</button>
@@ -455,7 +455,7 @@
                     </div>
                 </div>
                 
-                <input type="text" id="member-directory-search" placeholder="Search all members by name or ID..." class="search-bar mt-2" style="font-size: 1rem; padding: 0.75rem;" oninput="App.searchMemberDirectory()">
+                <input type="text" id="member-directory-search" placeholder="Search all members by name or ID..." class="search-bar mt-2" oninput="App.searchMemberDirectory()">
 
                 <div id="member-search-hint" class="hidden" style="background: var(--light); border: 1px solid var(--gray-light); border-radius: var(--border-radius); padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem;">
                     <span id="member-search-hint-text" class="text-gray" style="font-weight: 600;"></span>
@@ -1065,11 +1065,11 @@
                     <div style="flex: 1;">
                         <label class="text-gray font-bold">Belt</label>
                         <select id="form-belt" class="mt-1" onchange="App.updateBeltColor(this)">
-                            <option value="White" style="background: #ffffff; color: #1e293b;">White Belt</option>
-                            <option value="Blue" style="background: #1d4ed8; color: #ffffff;">Blue Belt</option>
-                            <option value="Purple" style="background: #6b21a8; color: #ffffff;">Purple Belt</option>
-                            <option value="Brown" style="background: #78350f; color: #ffffff;">Brown Belt</option>
-                            <option value="Black" style="background: #0f172a; color: #ffffff;">Black Belt</option>
+                            <option value="White" style="background: var(--white); color: var(--dark-panel);">White Belt</option>
+                            <option value="Blue" style="background: var(--primary-hover); color: var(--white);">Blue Belt</option>
+                            <option value="Purple" style="background: #6b21a8; color: var(--white);">Purple Belt</option>
+                            <option value="Brown" style="background: #78350f; color: var(--white);">Brown Belt</option>
+                            <option value="Black" style="background: var(--dark); color: var(--white);">Black Belt</option>
                         </select>
                     </div>
                 </div>
@@ -1118,7 +1118,7 @@
                         </div>
                         <div style="flex: 1;">
                             <label class="text-gray" id="label-payment-applied">Payment Applied</label>
-                            <input type="number" id="form-last-payment" class="mt-1" step="0.01" value="0.00" readonly style="background: #e2e8f0; color: var(--gray);">
+                            <input type="number" id="form-last-payment" class="mt-1" step="0.01" value="0.00" readonly style="background: var(--gray-light); color: var(--gray);">
                         </div>
                     </div>
 
@@ -1239,7 +1239,10 @@
 
     <div id="modal-checkin-classes" class="modal-overlay hidden">
         <div class="modal-content" style="max-width: 560px;">
-            <h2 style="margin:0;">Select Classes</h2>
+            <div class="flex justify-between align-center mb-1">
+                <h2 style="margin:0;">Select Classes</h2>
+                <button class="btn-outline" style="padding: 0.25rem 0.75rem;" onclick="App.closeModal('modal-checkin-classes')" aria-label="Close">✕</button>
+            </div>
             <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
             <div id="checkin-classes-content" style="max-height: 320px; overflow-y: auto;"></div>
             <div id="checkin-classes-open-menu" class="checkin-open-menu hidden"></div>
