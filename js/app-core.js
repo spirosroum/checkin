@@ -632,9 +632,20 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 FSEngine.arrayMirrors[col] = JSON.stringify(items);
                 FSEngine.ready[col] = true;
                 FSEngine.snapSeen.add(col);
-                if (FSEngine.migrationResolved && !FSEngine.dirty.has(col)) {
+                // Kiosk/member clients can never legitimately edit schedules/closedDates
+                // (they are admin-only writes), so a local "dirty" flag on these array
+                // docs is always spurious for them. Ignoring it here prevents a fresh
+                // client (empty localStorage / incognito) from getting the collection
+                // stuck empty: if the snapshot arrives before the migration state
+                // resolves and the flag gets set, the apply would be skipped forever
+                // (the doc never changes again, so no snapshot re-fires, and kiosk
+                // clients can't flush admin-only writes to clear it). Unlike per-record
+                // collections there is no dirty merge fallback, so we apply regardless.
+                const isAdmin = FSEngine.isAdminClient();
+                if (FSEngine.migrationResolved && (!FSEngine.dirty.has(col) || !isAdmin)) {
                     STATE[ARRAY_DOCS[col].state] = items;
                     FSEngine.applied.add(col);
+                    if (!isAdmin) FSEngine.dirty.delete(col);
                     fallbackToLocal();
                     renderAfterCloudSync();
                 }
@@ -647,7 +658,13 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             FSEngine.migrationResolved = true;
             Object.keys(CLOUD_COLLECTIONS).forEach(col => applyCollectionSnapshotData(col));
             Object.keys(ARRAY_DOCS).forEach(col => {
-                if (!FSEngine.dirty.has(col) && FSEngine.arrayMirrors[col] !== undefined) { STATE[ARRAY_DOCS[col].state] = JSON.parse(FSEngine.arrayMirrors[col]); FSEngine.applied.add(col); }
+                if (FSEngine.arrayMirrors[col] === undefined) return;
+                const isAdmin = FSEngine.isAdminClient();
+                if (!FSEngine.dirty.has(col) || !isAdmin) {
+                    STATE[ARRAY_DOCS[col].state] = JSON.parse(FSEngine.arrayMirrors[col]);
+                    FSEngine.applied.add(col);
+                    if (!isAdmin) FSEngine.dirty.delete(col);
+                }
             });
             fallbackToLocal();
             renderAfterCloudSync();
