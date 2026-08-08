@@ -1528,8 +1528,28 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 window.addEventListener('resize', App.updateKioskInputMode);
                 window.addEventListener('orientationchange', App.updateKioskInputMode);
 
-                // Initialize Firestore realtime sync (if available)
-                try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); }
+                // Start Firestore real-time sync with auth. Kiosk clients sign in
+                // anonymously so all requests carry a valid token — this prevents
+                // REST API scraping because rules require request.auth != null.
+                // The promise resolution ensures onSnapshot listeners are set up
+                // AFTER the auth token is available, avoiding transient denials.
+                (function bootstrapSync() {
+                    const auth = getAuth();
+                    if (!auth) {
+                        try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); }
+                        return;
+                    }
+                    if (auth.currentUser) {
+                        try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); }
+                        return;
+                    }
+                    auth.signInAnonymously()
+                        .then(() => { try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); } })
+                        .catch(err => {
+                            console.warn('Anonymous auth failed, kiosk reads may be denied:', err);
+                            try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); }
+                        });
+                })();
 
                 // Admin auth: hide the admin view initially, then let onAuthStateChanged
                 // reveal it if a valid admin session exists.
