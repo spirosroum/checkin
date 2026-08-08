@@ -43,21 +43,26 @@
         /* Buttons & Inputs */
         button { cursor: pointer; border: none; padding: 0.75rem 1.5rem; border-radius: var(--border-radius); font-size: 0.95rem; font-weight: 600; transition: all 0.2s ease; }
         .btn-primary { background: var(--primary); color: var(--white); }
-        .btn-primary:hover { background: var(--primary-hover); }
         .btn-success { background: var(--success); color: var(--white); }
         .btn-danger { background: var(--danger); color: var(--white); }
         .btn-warning { background: var(--warning); color: var(--white); }
         .btn-outline { background: transparent; border: 1px solid var(--gray); color: var(--dark); }
         .admin-toggle-link { background: transparent; border: none; padding: 0.25rem 0.5rem; color: var(--gray); font-size: 0.8rem; font-weight: 500; text-decoration: underline; opacity: 0.75; }
         .admin-toggle-link:hover { color: var(--dark); opacity: 1; background: transparent; transform: none; box-shadow: none; }
-        .btn-outline:hover { background: var(--gray-light); }
-        .btn-primary:hover, .btn-success:hover, .btn-danger:hover, .btn-warning:hover, .btn-outline:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
-        .btn-success:hover, .btn-danger:hover, .btn-warning:hover { filter: brightness(1.1); }
-        .btn-primary:active, .btn-success:active, .btn-danger:active, .btn-warning:active, .btn-outline:active { transform: translateY(1px); box-shadow: none; }
         .btn-google { background: var(--white); border: 1px solid #dadce0; color: #1a1a1a; display: inline-flex; align-items: center; justify-content: center; gap: 0.6rem; box-shadow: 0 1px 2px rgba(60, 64, 67, 0.2); }
-        .btn-google:hover { background: #f8f9fa; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(60, 64, 67, 0.25); }
         /* Make select elements that use btn-outline look like header buttons */
         select.btn-outline, select.lang-select { width: auto; padding: 0.4rem 0.8rem; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem; border-radius: 6px; background: transparent; }
+        /* Hover lifts/shades only apply on devices that actually hover. On touch
+           screens the :hover state sticks after a tap, so a button that lifts on
+           hover would stay shifted up until the user taps somewhere else. */
+        @media (hover: hover) {
+            .btn-primary:hover { background: var(--primary-hover); }
+            .btn-outline:hover { background: var(--gray-light); }
+            .btn-primary:hover, .btn-success:hover, .btn-danger:hover, .btn-warning:hover, .btn-outline:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+            .btn-success:hover, .btn-danger:hover, .btn-warning:hover { filter: brightness(1.1); }
+            .btn-google:hover { background: #f8f9fa; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(60, 64, 67, 0.2); }
+        }
+        .btn-primary:active, .btn-success:active, .btn-danger:active, .btn-warning:active, .btn-outline:active { transform: translateY(1px); box-shadow: none; }
         .kiosk-header .btn-primary,
         .kiosk-header .btn-outline,
         .kiosk-header .lang-select {
@@ -68,13 +73,15 @@
             color: var(--white);
             transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
         }
-        .kiosk-header .btn-primary:hover,
-        .kiosk-header .btn-outline:hover,
-        .kiosk-header .lang-select:hover {
-            background: rgba(255, 255, 255, 0.28);
-            border-color: rgba(255, 255, 255, 0.5);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        @media (hover: hover) {
+            .kiosk-header .btn-primary:hover,
+            .kiosk-header .btn-outline:hover,
+            .kiosk-header .lang-select:hover {
+                background: rgba(255, 255, 255, 0.28);
+                border-color: rgba(255, 255, 255, 0.5);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            }
         }
         .kiosk-header .lang-select {
             padding: 0 0.9rem;

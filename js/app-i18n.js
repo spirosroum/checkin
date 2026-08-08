@@ -30,8 +30,8 @@ App.KIOSK_I18N = {
         toggleLanguageTitle: 'Toggle language',
         menuLabel: 'Menu',
         languageLabel: 'Language',
-        leaderboardTitle: 'Most Trainings',
-        leaderboardSubtitle: 'Ranked by check-ins over the last 3 months.',
+        leaderboardTitle: 'Training Leaderboard',
+        leaderboardSubtitle: 'Most trainings last 3 months.',
         leaderboardBadge: 'Top 10',
         leaderboardRankColumn: 'Rank',
         leaderboardNoTrainings: 'No trainings recorded in the last 3 months yet.',
@@ -63,7 +63,7 @@ App.KIOSK_I18N = {
         memberViewRankLabel: 'Leaderboard Rank',
         memberViewRankUnranked: 'Unranked',
         memberHideLbTitle: 'Hide From Leaderboard',
-        memberHideLbDesc: 'Hide your name and rank from the Most Trainings leaderboard.',
+        memberHideLbDesc: 'Hide your name and rank from the Training Leaderboard.',
         memberHideLbVisible: 'Visible',
         memberHideLbHidden: 'Hidden',
         memberStatusFrozen: 'Frozen',
@@ -171,8 +171,8 @@ App.KIOSK_I18N = {
         toggleLanguageTitle: 'Αλλαγή γλώσσας',
         menuLabel: 'Μενού',
         languageLabel: 'Γλώσσα',
-        leaderboardTitle: 'Περισσότερες Προπονήσεις',
-        leaderboardSubtitle: 'Κατάταξη με βάση τα check-in των τελευταίων 3 μηνών.',
+        leaderboardTitle: 'Κατάταξη Προπονήσεων',
+        leaderboardSubtitle: 'Οι περισσότερες προπονήσεις των τελευταίων 3 μηνών.',
         leaderboardBadge: 'Top 10',
         leaderboardRankColumn: 'Θέση',
         leaderboardNoTrainings: 'Δεν υπάρχουν προπονήσεις στους τελευταίους 3 μήνες ακόμα.',
@@ -204,7 +204,7 @@ App.KIOSK_I18N = {
         memberViewRankLabel: 'Θέση στην Κατάταξη',
         memberViewRankUnranked: 'Χωρίς κατάταξη',
         memberHideLbTitle: 'Απόκρυψη από την Κατάταξη',
-        memberHideLbDesc: 'Αποκρύψτε το όνομά σας και τη θέση σας από τον πίνακα Περισσότερες Προπονήσεις.',
+        memberHideLbDesc: 'Αποκρύψτε το όνομά σας και τη θέση σας από την Κατάταξη Προπονήσεων.',
         memberHideLbVisible: 'Ορατό',
         memberHideLbHidden: 'Απόκρυψη',
         memberStatusFrozen: 'Παγωμένος',
@@ -394,8 +394,8 @@ App.applyKioskTranslations = function() {
         const backBtn = Array.from(document.querySelectorAll('#modal-login .btn-outline')).find(b => b && b.innerText && (b.innerText.includes('Back') || b.innerText.includes('Πίσω')));
         if (backBtn) backBtn.innerText = map.backToKiosk;
 
-        const leaderboardTitle = document.getElementById('kiosk-leaderboard-title'); if (leaderboardTitle) leaderboardTitle.innerText = map.leaderboardTitle || 'Most Trainings';
-        const leaderboardSubtitle = document.getElementById('kiosk-leaderboard-subtitle'); if (leaderboardSubtitle) leaderboardSubtitle.innerText = map.leaderboardSubtitle || 'Ranked by check-ins over the last 3 months.';
+        const leaderboardTitle = document.getElementById('kiosk-leaderboard-title'); if (leaderboardTitle) leaderboardTitle.innerText = map.leaderboardTitle || 'Training Leaderboard';
+        const leaderboardSubtitle = document.getElementById('kiosk-leaderboard-subtitle'); if (leaderboardSubtitle) leaderboardSubtitle.innerText = map.leaderboardSubtitle || 'Most trainings last 3 months.';
         const leaderboardBadge = document.getElementById('kiosk-leaderboard-badge'); if (leaderboardBadge) leaderboardBadge.innerText = map.leaderboardBadge || 'Top 10';
 
         const classDetailsTitle = document.getElementById('class-details-title'); if (classDetailsTitle) classDetailsTitle.innerText = map.classDetailsTitle || 'Class Details';
@@ -413,7 +413,7 @@ App.applyKioskTranslations = function() {
         const memberNewIdInput = document.getElementById('member-new-id'); if (memberNewIdInput) memberNewIdInput.placeholder = map.memberChangeIdPlaceholder || 'New ID (max 8 digits)';
         const memberChangeIdSave = document.getElementById('member-change-id-save'); if (memberChangeIdSave) memberChangeIdSave.innerText = map.memberChangeIdSave || 'Save ID';
         const memberHideLbTitle = document.getElementById('member-hide-lb-title'); if (memberHideLbTitle) memberHideLbTitle.innerText = map.memberHideLbTitle || 'Hide From Leaderboard';
-        const memberHideLbDesc = document.getElementById('member-hide-lb-desc'); if (memberHideLbDesc) memberHideLbDesc.innerText = map.memberHideLbDesc || 'Hide your name and rank from the Most Trainings leaderboard.';
+        const memberHideLbDesc = document.getElementById('member-hide-lb-desc'); if (memberHideLbDesc) memberHideLbDesc.innerText = map.memberHideLbDesc || 'Hide your name and rank from the Training Leaderboard.';
         const memberHistorySummary = document.getElementById('member-history-summary'); if (memberHistorySummary) memberHistorySummary.innerText = map.memberHistorySummary || 'My Personal Calendar & Check-in History';
         const memberUnpaidTitle = document.getElementById('member-unpaid-title'); if (memberUnpaidTitle) memberUnpaidTitle.innerText = map.memberUnpaidTitle || 'Unpaid Training Sessions';
         const memberUnpaidDesc = document.getElementById('member-unpaid-desc'); if (memberUnpaidDesc) memberUnpaidDesc.innerText = map.memberUnpaidDesc || 'The following past visits were recorded while your account was expired or frozen.';

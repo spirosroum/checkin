@@ -197,6 +197,14 @@ Object.assign(App, {
                 }
             },
 
+            // Training count used by the leaderboard and member stats.
+            // Intentional: one "training" = one unique class/date/time-slot check-in,
+            // NOT one check-in action. A member who checks in for two classes in a
+            // single action (e.g. back-to-back classes) therefore earns TWO trainings
+            // here, even though session bundles are consumed per action (see
+            // confirmKioskClassSelection / confirmAdminCheckinSelection).
+            // Falls back to raw visit count only when no class check-ins exist
+            // (legacy data recorded before class-level check-ins).
             getMemberTrainingCount: (memberId, sinceDate = null) => {
                 const checkins = DB.getClassCheckins().filter(ci => ci.memberId === memberId && ci.entryTime);
                 let filtered = checkins;
