@@ -37,6 +37,15 @@
 
 const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '#0891b2', '#db2777', '#334155', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#0f766e', '#86198f'];
 
+        // Sensitive member fields stored in /members/{id}/private/info subcollection.
+        // These are never sent to non-admin clients. The top-level member doc
+        // contains only public/display fields (name, belt, expiration, etc.).
+        // Email is intentionally kept public — it is required for the member
+        // Google sign-in email-to-member-ID resolution on the client side.
+        // For stronger email privacy, a Cloud Function can be added later to
+        // resolve this server-side without exposing emails client-side.
+        const MEMBER_PRIVATE_FIELDS = ['phone', 'dob', 'notes'];
+
         // CLOUD-SYNCED DATA LAYER (Firestore)
         const STATE = {
             members: JSON.parse(localStorage.getItem('gym_members') || '[]'),
@@ -55,7 +64,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             hiddenBelts: JSON.parse(localStorage.getItem('gym_hidden_belts') || '[]'),
             currency: localStorage.getItem('gym_currency') || '€',
             checkinNotice: localStorage.getItem('gym_checkin_notice') || '',
-            checkinNoticeColor: localStorage.getItem('gym_checkin_notice_color') || '#fde68a'
+            checkinNoticeColor: localStorage.getItem('gym_checkin_notice_color') || '#fde68a',
+            memberPrivate: JSON.parse(localStorage.getItem('gym_member_private') || '{}')
         };
 
         let db = null; // firebase.firestore() compat instance
@@ -79,6 +89,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.setItem('gym_currency', STATE.currency || '€');
                 localStorage.setItem('gym_checkin_notice', STATE.checkinNotice || '');
                 localStorage.setItem('gym_checkin_notice_color', STATE.checkinNoticeColor || '#fde68a');
+                localStorage.setItem('gym_member_private', JSON.stringify(STATE.memberPrivate || {}));
             } catch (err) {
                 console.warn('Failed to persist to localStorage fallback', err);
             }
@@ -267,6 +278,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                             const t = resolveRenameTarget(rec.memberId);
                             if (t && t !== rec.memberId) writeRec = Object.assign({}, rec, { memberId: t });
                         }
+                        // Strip private fields from member writes — they belong in
+                        // the /members/{id}/private subcollection, never in the top-level doc.
+                        if (col === 'members') writeRec = Object.assign({}, writeRec);
+                        if (col === 'members') MEMBER_PRIVATE_FIELDS.forEach(f => { delete writeRec[f]; });
                         const json = JSON.stringify(writeRec);
                         if (mirror.get(key) !== json) {
                             ops.push({ col, key, type: 'set', data: writeRec });
@@ -587,6 +602,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 snapshot.forEach(d => {
                     const rec = d.data();
                     if (!rec || typeof rec !== 'object') return;
+                    // Strip private fields from members collection cloud data
+                    // (they belong in the /members/{id}/private subcollection).
+                    // This handles legacy docs that still carry private fields.
+                    if (col === 'members') {
+                        MEMBER_PRIVATE_FIELDS.forEach(f => { delete rec[f]; });
+                    }
                     mirror.set(d.id, JSON.stringify(rec));
                     // A member doc whose id field no longer matches its docId is a
                     // rename straggler: keep it in the mirror so a flush can delete
@@ -676,7 +697,18 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 FSEngine.db = db;
 
                 Object.keys(CLOUD_COLLECTIONS).forEach(col => {
-                    db.collection(col).onSnapshot(handleCollectionSnapshot(col), err => console.error('Firestore listener error (' + col + '):', err));
+                    db.collection(col).onSnapshot(handleCollectionSnapshot(col), err => {
+                        console.error('Firestore listener error (' + col + '):', err);
+                        // Notifications are write-only for kiosk (rules allow create but not
+                        // read). Mark the collection as ready with empty data so the kiosk
+                        // can still create notifications without the sync engine blocking.
+                        if (col === 'notifications' && !FSEngine.ready[col]) {
+                            FSEngine.mirrors[col] = new Map();
+                            FSEngine.lastDocs[col] = [];
+                            FSEngine.ready[col] = true;
+                            FSEngine.snapSeen.add(col);
+                        }
+                    });
                 });
                 // Rename ledger: oldId -> newId for every self-service ID change.
                 // Kept separate from CLOUD_COLLECTIONS because it is a key-value
@@ -723,7 +755,17 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
         const DB = {
             // getters
-            getMembers: () => STATE.members || [],
+            getMembers: () => {
+                const members = (STATE.members || []).slice();
+                if (!FSEngine.isAdminClient()) return members;
+                const priv = STATE.memberPrivate || {};
+                members.forEach(m => {
+                    if (m.id && priv[m.id]) {
+                        Object.assign(m, priv[m.id]);
+                    }
+                });
+                return members;
+            },
             getBin: () => STATE.bin || [],
             getVisits: () => STATE.visits || [],
             getPlans: () => STATE.plans || [],
@@ -742,7 +784,44 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             getCheckinNoticeColor: () => STATE.checkinNoticeColor || '#fde68a',
 
             // setters (update state and persist)
-            saveMembers: (data) => { STATE.members = data || []; return saveToCloud(); },
+            saveMembers: (data) => {
+                const members = data || [];
+                // Extract private fields into the separate cache, strip from members.
+                const priv = STATE.memberPrivate || {};
+                const updatedPrivate = new Set();
+                const memberIds = new Set();
+                members.forEach(m => {
+                    if (!m.id) return;
+                    memberIds.add(m.id);
+                    const entry = {};
+                    let hasPrivate = false;
+                    MEMBER_PRIVATE_FIELDS.forEach(f => {
+                        if (m[f] !== undefined) { entry[f] = m[f]; hasPrivate = true; delete m[f]; }
+                    });
+                    if (hasPrivate) { priv[m.id] = entry; updatedPrivate.add(m.id); }
+                });
+                // Clean up private fields for members removed from the array
+                Object.keys(priv).forEach(mid => {
+                    if (!memberIds.has(mid)) { delete priv[mid]; updatedPrivate.add(mid); }
+                });
+                STATE.memberPrivate = priv;
+                STATE.members = members;
+                // Write private fields to Firestore subcollection (async, fire-and-forget)
+                if (updatedPrivate.size > 0 && db && db.collection) {
+                    updatedPrivate.forEach(mid => {
+                        if (priv[mid]) {
+                            db.collection('members').doc(mid).collection('private').doc('info')
+                                .set(priv[mid], { merge: true })
+                                .catch(err => console.warn('Failed to write member private fields for', mid, err));
+                        } else {
+                            db.collection('members').doc(mid).collection('private').doc('info')
+                                .delete()
+                                .catch(err => console.warn('Failed to delete member private fields for', mid, err));
+                        }
+                    });
+                }
+                return saveToCloud();
+            },
             saveBin: (data) => { STATE.bin = data || []; return saveToCloud(); },
             saveVisits: (data) => { STATE.visits = data || []; return saveToCloud(); },
             savePlans: (data) => { STATE.plans = data || []; return saveToCloud(); },
@@ -760,9 +839,40 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             saveCheckinNotice: (msg) => { STATE.checkinNotice = msg || ''; return saveToCloud(); },
             saveCheckinNoticeColor: (color) => { STATE.checkinNoticeColor = color || '#fde68a'; return saveToCloud(); },
 
+            fetchAllMemberPrivate: async () => {
+                if (!db || !db.collection) return;
+                const members = STATE.members || [];
+                const priv = {};
+                const promises = members.map(m => {
+                    if (!m.id) return Promise.resolve();
+                    return db.collection('members').doc(m.id).collection('private').doc('info').get()
+                        .then(doc => {
+                            if (doc.exists) {
+                                const data = doc.data() || {};
+                                const entry = {};
+                                MEMBER_PRIVATE_FIELDS.forEach(f => {
+                                    if (data[f] !== undefined) entry[f] = data[f];
+                                });
+                                if (Object.keys(entry).length > 0) priv[m.id] = entry;
+                            }
+                        })
+                        .catch(() => {});
+                });
+                await Promise.all(promises);
+                STATE.memberPrivate = priv;
+                fallbackToLocal();
+            },
+
             exportData: () => {
+                const members = (STATE.members || []).map(m => {
+                    const entry = Object.assign({}, m);
+                    if (FSEngine.isAdminClient() && STATE.memberPrivate && STATE.memberPrivate[m.id]) {
+                        Object.assign(entry, STATE.memberPrivate[m.id]);
+                    }
+                    return entry;
+                });
                 const data = {
-                    members: STATE.members || [], visits: STATE.visits || [], payments: STATE.payments || [],
+                    members: members, visits: STATE.visits || [], payments: STATE.payments || [],
                     plans: STATE.plans || [], planBin: STATE.planBin || [], closedDates: STATE.closedDates || [], schedules: STATE.schedules || [], scheduleBin: STATE.scheduleBin || [],
                     portalName: STATE.portalName || '🥋 BJJ Kiosk Portal', hiddenBelts: STATE.hiddenBelts || [],
                     bin: STATE.bin || [], classCheckins: STATE.classCheckins || [], notifications: STATE.notifications || [],
@@ -798,6 +908,20 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         if (data.classCheckins) STATE.classCheckins = data.classCheckins;
                         if (data.currency) STATE.currency = data.currency;
                         if (data.checkinNoticeColor) STATE.checkinNoticeColor = data.checkinNoticeColor;
+
+                        // Extract private fields from imported member data and store
+                        // in the private subcollection cache, then stripe public-only.
+                        const priv = STATE.memberPrivate || {};
+                        (STATE.members || []).forEach(m => {
+                            if (!m.id) return;
+                            const entry = {};
+                            let hasPrivate = false;
+                            MEMBER_PRIVATE_FIELDS.forEach(f => {
+                                if (m[f] !== undefined) { entry[f] = m[f]; hasPrivate = true; delete m[f]; }
+                            });
+                            if (hasPrivate) priv[m.id] = entry;
+                        });
+                        STATE.memberPrivate = priv;
 
                         saveToCloud().then(() => {
                             alert('Backup restored successfully!');
@@ -1028,7 +1152,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             currentUser: null,
             authUser: null,
             adminAuthed: false,
-            adminViewTemplate: null,
             adminListenersBound: false,
             dirSortCol: 'name',
             dirSortAsc: true,
@@ -1235,7 +1358,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             // ---------- ADMIN AUTH & VIEW GATING ----------
             // True only while the Firebase Auth user matches ADMIN_EMAIL.
             // Every admin entry point (navigate, renders) checks this flag,
-            // and the admin view is physically removed from the DOM when locked.
+            // and the admin view is CSS-hidden when locked (data protection is
+            // enforced at the Firestore rules level, not the UI).
             isAdminAuthed: () => !!App.adminAuthed,
 
             initAuth: () => {
@@ -1256,8 +1380,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             },
 
             // Rebind event listeners for elements inside #view-admin.
-            // The admin view is removed from the DOM when locked, so listeners
-            // attached at init are lost and must be re-attached after unlock.
+            // Listeners are attached once at init and again after each unlock
+            // (adminListenersBound flag prevents duplicates).
             bindAdminListeners: () => {
                 if (App.adminListenersBound) return;
                 const bind = (id, evt, fn) => {
@@ -1272,15 +1396,15 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 App.adminListenersBound = true;
             },
 
-            // Remove the admin view from the DOM entirely (not just CSS-hidden)
-            // and force the kiosk (unless a member/mobile view is active).
+            // CSS-hide the admin view and force the kiosk (unless a member/mobile
+            // view is active). Also clears sensitive client-side data.
             lockAdmin: () => {
                 App.adminAuthed = false;
                 App.adminListenersBound = false;
                 const adminView = document.getElementById('view-admin');
                 if (adminView) {
-                    if (!App.adminViewTemplate) App.adminViewTemplate = adminView.outerHTML;
-                    adminView.remove();
+                    adminView.classList.add('hidden');
+                    document.querySelectorAll('.view-pane').forEach(el => el.classList.add('hidden'));
                 }
                 const memberVisible = document.getElementById('view-member') && !document.getElementById('view-member').classList.contains('hidden');
                 const mobileVisible = document.getElementById('view-mobile-checkin') && !document.getElementById('view-mobile-checkin').classList.contains('hidden');
@@ -1291,19 +1415,31 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 }
                 App.closeModal('modal-login');
                 App.renderCheckinNotice && App.renderCheckinNotice();
+                App.clearSensitiveData();
             },
 
-            // Re-insert the admin view from the cached template after successful auth.
+            // Securely erase private member PII, payment data, and visit history
+            // from the client when admin auth is lost or the user logs out.
+            clearSensitiveData: () => {
+                STATE.memberPrivate = {};
+                if (STATE.members) {
+                    STATE.members.forEach(m => {
+                        MEMBER_PRIVATE_FIELDS.forEach(f => { delete m[f]; });
+                    });
+                }
+                localStorage.removeItem('gym_member_private');
+                fallbackToLocal();
+            },
+
+            // Reveal the admin view (already present in DOM, toggled via CSS)
+            // and fetch private member fields from the secure subcollection.
             unlockAdmin: () => {
                 App.adminAuthed = true;
-                if (!document.getElementById('view-admin')) {
-                    if (App.adminViewTemplate) {
-                        document.body.insertAdjacentHTML('beforeend', App.adminViewTemplate);
-                    } else {
-                        console.warn('No admin view template cached — cannot unlock admin portal.');
-                        App.adminAuthed = false;
-                        return;
-                    }
+                const adminView = document.getElementById('view-admin');
+                if (!adminView) {
+                    console.warn('Admin view not found in DOM — cannot unlock admin portal.');
+                    App.adminAuthed = false;
+                    return;
                 }
                 App.bindAdminListeners();
                 // Flush any pending local writes under admin privileges and retry
@@ -1320,10 +1456,15 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     document.querySelectorAll('.app-container').forEach(el => el.classList.add('hidden'));
                     const kiosk = document.getElementById('view-kiosk');
                     if (kiosk) kiosk.classList.add('hidden');
-                    const adminView = document.getElementById('view-admin');
                     if (adminView) adminView.classList.remove('hidden');
                     App.navigate('admin-checkin');
                 }
+                // Fetch private member PII from the secure subcollection, then re-render
+                DB.fetchAllMemberPrivate().then(() => {
+                    renderAfterCloudSync();
+                }).catch(() => {
+                    renderAfterCloudSync();
+                });
             },
 
             // One-time startup reconciliation: re-derives each member's session
@@ -1378,10 +1519,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 // Initialize Firestore realtime sync (if available)
                 try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); }
 
-                // Admin auth: cache the admin view template, lock it out of the DOM,
-                // then let onAuthStateChanged unlock it if a valid admin session exists.
+                // Admin auth: hide the admin view initially, then let onAuthStateChanged
+                // reveal it if a valid admin session exists.
                 const adminView = document.getElementById('view-admin');
-                if (adminView) App.adminViewTemplate = adminView.outerHTML;
+                if (adminView) adminView.classList.add('hidden');
                 App.lockAdmin();
                 App.initAuth();
 

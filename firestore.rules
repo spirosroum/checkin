@@ -5,23 +5,23 @@ service cloud.firestore {
     // =====================================================================
     // GymDesk security rules (per-record architecture)
     //
-    // Data lives in per-record collections (docId == record.id), plus a few
-    // small single array docs (schedules/global, closedDates/global) and
-    // settings/global. A one-time migration fans out the legacy gym/data
-    // document into these collections; the legacy doc is read-only after that.
+    // SECURITY MODEL:
+    //   * PUBLIC-READ  — schedule, plans, settings, closedDates, visits,
+    //                    classCheckins (kiosk/member-portal essentials).
+    //   * ADMIN-READ   — payments, notifications, bins, memberRenames,
+    //                    member private fields (email, phone, dob, notes).
+    //   * WRITE        — admin may write everything. Anonymous kiosk may
+    //                    create/update visits, classCheckins, notifications;
+    //                    update member sessionsLeft/id; create/delete member
+    //                    docs for self-service ID renames.
     //
-    //   * READ  : public — the kiosk and member portal must verify member IDs
-    //             and render the schedule/plans without signing in.
-    //   * WRITE : admin (Firebase Auth email below) may write everything.
-    //             Anonymous kiosk flows may ONLY:
-    //               - create/update visits and classCheckins (check-ins),
-    //               - create notifications (frozen/unpaid alerts),
-    //               - update member docs on sessionsLeft / id only
-    //                 (session decrement and self-service ID change), and
-    //                 create/delete member docs for self-service ID renames.
+    // MEMBER PRIVATE DATA:
+    //   Sensitive PII (phone, dob, notes) lives in a per-member
+    //   subcollection: /members/{id}/private/info — admin-only read/write.
+    //   Email is kept public to support member Google sign-in resolution.
+    //   The top-level member doc contains only public/display fields.
     //
     // DEPLOY: firebase deploy --only firestore:rules
-    // (or paste in Firebase Console -> Firestore Database -> Rules)
     // =====================================================================
 
     // The gym administrator account (must match ADMIN_EMAIL in js/app-core.js)
@@ -36,74 +36,63 @@ service cloud.firestore {
       return request.auth == null;
     }
 
-    // Kiosk may only adjust session counts and its own ID on member docs —
-    // NOT expiration dates, account status, belt, plans, etc. This closes the
-    // legacy whole-document write escalation (kioskKeys() allowed rewriting
-    // the entire members array).
+    // Kiosk may only adjust session counts and its own ID on member docs
     function kioskMemberUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sessionsLeft', 'id']);
     }
 
     // Kiosk check-in flows may only touch the timestamps/status of visits
-    // (check-out, auto-checkout, member-id rewrite) — never other fields.
     function kioskVisitUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['exitTime', 'expectedExitTime', 'isUnpaid', 'memberId', 'entryTime']);
     }
 
-    // Kiosk may only rewrite the memberId on class check-ins (ID changes).
+    // Kiosk may only rewrite the memberId on class check-ins (ID changes)
     function kioskClassCheckinUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberId']);
     }
 
+    // =====================================================================
+    // PUBLIC-READ COLLECTIONS (kiosk/member-portal require these)
+    // =====================================================================
+
     // Legacy single-document store: kept for history; admin writes only.
-    // Stale cached clients that still write gym/data are denied and fall back
-    // to local-only operation until they receive the updated code.
     match /gym/{docId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
+    // Settings (portal name, currency, belt visibility, checkin notice)
     match /settings/{docId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
+    // Migration state marker
     match /meta/{docId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
-    // Single array docs (order-preserving; admin-written only)
+    // Class schedules (public kiosk calendar)
     match /schedules/{docId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
+    // Academy closed dates
     match /closedDates/{docId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
-    match /members/{docId} {
+    // Membership plans (public pricing/plan listing)
+    match /plans/{docId} {
       allow read: if true;
-      // Self-service ID change creates the new doc (id must match its docId)...
-      allow create: if isAdmin() || (isKiosk() && request.resource.data.id == docId);
-      // ...the kiosk may only touch session counts and its own id field...
-      allow update: if isAdmin() || (isKiosk() && kioskMemberUpdate());
-      // ...then the old doc is deleted (its id field now differs from docId,
-      // which also prevents kiosk clients from deleting other members' docs)
-      allow delete: if isAdmin() || (isKiosk() && resource.data.id != docId);
+      allow create, update, delete: if isAdmin();
     }
 
-    match /memberRenames/{docId} {
-      allow read: if true;
-      // Kiosk self-service ID changes publish oldId -> newId here so every
-      // client can reconcile stale local copies (instead of resurrecting the
-      // old member doc). Only the owning oldId may be written by a kiosk.
-      allow create, update: if isAdmin() || (isKiosk() && request.resource.data.oldId == docId && request.resource.data.newId is string && request.resource.data.newId.size() > 0);
-      allow delete: if isAdmin();
-    }
-
+    // Visits (kiosk "Currently Inside" and leaderboard need read access;
+    // no PII beyond memberId, which is already visible on the kiosk)
     match /visits/{docId} {
       allow read: if true;
       allow create: if true;
@@ -111,6 +100,8 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Class-level check-in records (leaderboard training counts,
+    // class-details modal check-in history)
     match /classCheckins/{docId} {
       allow read: if true;
       allow create: if true;
@@ -118,40 +109,68 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // =====================================================================
+    // ADMIN-ONLY READ COLLECTIONS (sensitive data / internal operations)
+    // =====================================================================
+
+    // Payment ledger (financial records)
+    match /payments/{docId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // System notifications (contains member activity alerts)
     match /notifications/{docId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow create: if true;
       allow update, delete: if isAdmin();
     }
 
-    match /payments/{docId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+    // Member ID rename ledger (internal sync metadata)
+    match /memberRenames/{docId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() || (isKiosk() && request.resource.data.oldId == docId && request.resource.data.newId is string && request.resource.data.newId.size() > 0);
+      allow delete: if isAdmin();
     }
 
-    match /plans/{docId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
-    }
-
+    // Recycle bins (deleted records)
     match /planBin/{docId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
 
     match /scheduleBin/{docId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
 
     match /notificationBin/{docId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
 
     match /bin/{docId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow create, update, delete: if isAdmin();
+    }
+
+    // =====================================================================
+    // MEMBERS — public fields on top-level doc, private fields in subcollection
+    // =====================================================================
+
+    // Top-level member doc: public display fields (name, belt, gender,
+    // expirationDate, accountStatus, sessionsLeft, planDays, hideFromLeaderboard)
+    match /members/{docId} {
+      allow read: if true;
+      allow create: if isAdmin() || (isKiosk() && request.resource.data.id == docId);
+      allow update: if isAdmin() || (isKiosk() && kioskMemberUpdate());
+      allow delete: if isAdmin() || (isKiosk() && resource.data.id != docId);
+    }
+
+    // Private member subcollection: email, phone, dob, notes
+    // Admin-only read/write. Kiosk clients cannot access this subcollection.
+    match /members/{docId}/private/{subDoc} {
+      allow read, write: if isAdmin();
     }
   }
 }
