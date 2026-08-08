@@ -917,9 +917,6 @@
                 <h2 id="member-drawer-title" class="portal-drawer-title">🥋 BJJ Kiosk Portal</h2>
                 <button class="portal-drawer-close-btn" onclick="App.toggleMemberMenu()" aria-label="Close menu">✕</button>
             </div>
-            <div class="portal-drawer-section" id="member-drawer-section-menu">Menu</div>
-            <div class="portal-drawer-item" id="member-drawer-plans" onclick="App.toggleMemberMenu(); App.showPublicPlans();">View Plans</div>
-            <div class="portal-drawer-item" id="member-drawer-classes" onclick="App.toggleMemberMenu(); App.showPublicClasses();">Available Classes</div>
             <div class="portal-drawer-section" id="member-drawer-section-lang">Language</div>
             <div class="portal-drawer-item" id="member-drawer-lang" onclick="App.toggleLanguage()">🇬🇧 English</div>
             <div class="portal-drawer-item portal-drawer-danger" id="member-drawer-logout" onclick="App.logout()">Logout</div>
@@ -928,8 +925,6 @@
             <div class="flex justify-between align-center mb-2 member-topbar">
                 <h1 id="member-dash-title" style="margin:0;">My Dashboard</h1>
                 <div class="member-header">
-                    <button class="btn-outline portal-header-action" onclick="App.showPublicPlans()" aria-label="View Plans" title="View Plans">View Plans</button>
-                    <button class="btn-outline portal-header-action" onclick="App.showPublicClasses()" aria-label="Available Classes" title="Available Classes">Available Classes</button>
                     <button class="btn-outline portal-header-action" onclick="App.logout()" aria-label="Logout" title="Logout">Logout</button>
                     <button id="member-lang-btn" class="btn-outline portal-lang-btn" onclick="App.toggleLanguage()" aria-label="Toggle language" title="Toggle language">🇬🇧</button>
                     <button id="member-menu-btn" class="btn-outline portal-menu-toggle portal-menu-only" onclick="App.toggleMemberMenu()" aria-label="Open menu" title="Menu">☰</button>

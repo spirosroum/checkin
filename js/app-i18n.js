@@ -15,7 +15,7 @@ App.KIOSK_I18N = {
         scanPrompt: 'Scan or enter your Member ID to Check-In.',
         numpadClear: 'Clear',
         numpadBack: 'Back',
-        checkInButton: 'Check-In',
+        checkInButton: 'Check In',
         noticeTitle: 'Notice',
         noticeGotIt: 'Got it!',
         publicPlansTitle: 'Available Memberships',
@@ -368,7 +368,7 @@ App.applyKioskTranslations = function() {
             const txt = btn.innerText.trim();
             if (txt === 'Clear' || txt === 'Καθάρισμα') btn.innerText = map.numpadClear;
             if (txt === 'Back' || txt === 'Πίσω') btn.innerText = map.numpadBack;
-            if (txt === 'Check-In' || txt === 'Εγγραφή') btn.innerText = map.checkInButton;
+            if (txt === 'Check-In' || txt === 'Check In' || txt === 'Εγγραφή') btn.innerText = map.checkInButton;
         });
         // Desktop checkin button
         const desktopBtn = document.querySelector('.desktop-checkin-btn'); if (desktopBtn) desktopBtn.innerText = map.checkInButton;
