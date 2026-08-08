@@ -953,6 +953,15 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const beltClass = baseBelt.toLowerCase();
                 return `<span class="belt-badge belt-${beltClass}">${baseBelt}</span>`;
             },
+            // Textless, fixed-width belt indicator (same size for every belt).
+            // Used in compact kiosk lists (leaderboard, Currently Inside) so
+            // rows align and only the belt color communicates rank.
+            getBeltBox: (rawBelt) => {
+                const b = rawBelt || 'White';
+                const baseBelt = b.split('/')[0].trim();
+                const beltClass = baseBelt.toLowerCase();
+                return `<span class="belt-box belt-${beltClass}" aria-label="${baseBelt}"></span>`;
+            },
             // Combined ID badge: the member ID inside the belt-colored box.
             // All boxes keep the same fixed width so rows align uniformly.
             getMemberIdBadge: (m) => {

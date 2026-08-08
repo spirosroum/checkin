@@ -164,6 +164,18 @@
         .day-picker label:has(input:checked) { background: var(--bg-info-soft); border-color: var(--primary); color: var(--primary); }
         .drag-over { border-style: dashed !important; opacity: 0.7; }
 
+        /* Check-in activity calendar: uniform cell height so the grid stays the
+           same size between months (leading/trailing blanks share the class). */
+        .analytical-cal-cell {
+            border: 1px solid var(--gray-light);
+            border-radius: 4px;
+            padding: 10px;
+            height: 88px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
         /* Color Palette Swatches */
         .color-swatch { width: 32px; height: 32px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform 0.2s, border-color 0.2s; }
         .color-swatch:hover, .color-swatch.selected { transform: scale(1.15); border-color: var(--dark); }
@@ -253,9 +265,15 @@
         .belt-brown { background: #78350f; color: var(--white); border-color: #451a03; }
         .belt-black { background: var(--dark); color: var(--white); border-color: #000000; }
         .belt-kids { background: #f59e0b; color: var(--white); border-color: #b45309; }
+        /* Textless fixed-width belt indicator used in compact kiosk lists.
+           Reuses the .belt-* color classes above so every belt is the same size. */
+        .belt-box { display: inline-block; width: 84px; height: 22px; border-radius: 4px; vertical-align: middle; }
 
         /* Kiosk "Most Trainings" leaderboard */
         .kiosk-leaderboard { display: flex; flex-direction: column; gap: 0.55rem; }
+        /* Header "Top 10" badge: keep it from shrinking/wrapping on narrow phones,
+           otherwise the label wraps to two lines and no longer centers in the pill. */
+        #kiosk-leaderboard-badge { flex-shrink: 0; white-space: nowrap; text-align: center; }
         .kiosk-lb-card { display: flex; align-items: center; gap: 0.75rem; background: var(--white); border: 1px solid var(--gray-light); border-radius: 12px; padding: 0.65rem 0.85rem; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05); transition: border-color 0.2s, box-shadow 0.2s; }
         .kiosk-lb-card:hover { border-color: #cbd5e1; box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08); }
         .kiosk-lb-rank { flex-shrink: 0; display: flex; align-items: center; }
@@ -273,7 +291,12 @@
         .kiosk-header h1 { color: var(--white); margin: 0; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
         .kiosk-header .kiosk-header-actions { justify-content: flex-end; }
         .kiosk-main { flex: 1; padding: 2rem; max-width: 1400px; margin: 0 auto; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start; }
-        .kiosk-input-card { background: var(--white); padding: 3rem 2rem; border-radius: var(--border-radius); box-shadow: var(--shadow); text-align: center; border-top: 5px solid var(--primary); }
+        /* Unified kiosk panels: shared border + header so Member Check-In,
+           Currently Inside, Gym Schedule and Training Leaderboard look consistent. */
+        .kiosk-card, .kiosk-input-card { background: var(--white); border: 1px solid var(--gray-light); border-radius: var(--border-radius); box-shadow: var(--shadow); overflow: hidden; }
+        .kiosk-card-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--gray-light); background: var(--light); }
+        .kiosk-card-header h3 { margin: 0; font-size: 1.25rem; }
+        .kiosk-card-body { padding: 1.5rem; }
         
         .kiosk-msg { font-size: 1.25rem; font-weight: bold; min-height: 2rem; margin-top: 1rem; border-radius: var(--border-radius); padding: 0.5rem; }
         .kiosk-msg.success { background: var(--bg-success-soft); color: #166534; }
@@ -620,6 +643,7 @@
 
             /* Analytical calendar denser on small screens */
             #analytical-calendar-container > div > div { padding: 4px !important; }
+            .analytical-cal-cell { height: 64px !important; }
             #analytical-calendar-container strong { font-size: 0.85rem; }
             #analytical-calendar-container span { font-size: 0.65rem; }
 

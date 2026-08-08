@@ -41,35 +41,39 @@
                 </div>
             </div>
 
-            <div class="kiosk-input-card flex-col align-center" style="height: 100%;">
-                <h2>Member Check-In</h2>
-                <p class="text-gray mt-1" style="font-size: 1.1rem;">Scan or enter your Member ID to check in.</p>
-                <input type="text" id="kiosk-id-input" readonly inputmode="none" class="search-bar mt-2" placeholder="󠁯•󠁏󠁏󠁯•󠁏󠁏󠁯•󠁏󠁏󠁯•󠁏󠁏" maxlength="8" pattern="\d*" style="font-size: 3rem; text-align: center; letter-spacing: 5px; width: 80%; max-width: 300px;" onkeyup="if(event.key === 'Enter') App.kioskSubmit()">
-                
-                <!-- Numpad -->
-                <div class="kiosk-numpad mt-2">
-                    <button onclick="App.numpadPress('1')">1</button>
-                    <button onclick="App.numpadPress('2')">2</button>
-                    <button onclick="App.numpadPress('3')">3</button>
-                    <button onclick="App.numpadPress('4')">4</button>
-                    <button onclick="App.numpadPress('5')">5</button>
-                    <button onclick="App.numpadPress('6')">6</button>
-                    <button onclick="App.numpadPress('7')">7</button>
-                    <button onclick="App.numpadPress('8')">8</button>
-                    <button onclick="App.numpadPress('9')">9</button>
-                    <button onclick="App.numpadPress('clear')" style="font-size: 1rem; color: var(--danger);">Clear</button>
-                    <button onclick="App.numpadPress('0')">0</button>
-                    <button onclick="App.numpadPress('back')" style="font-size: 1rem;">Back</button>
-                    <button onclick="App.kioskSubmit()" class="btn-enter">Check In</button>
+            <div class="kiosk-input-card" style="height: 100%;">
+                <div class="kiosk-card-header">
+                    <h3>Member Check-In</h3>
                 </div>
+                <div class="flex-col align-center kiosk-card-body" style="text-align: center;">
+                    <p class="text-gray mt-1" style="font-size: 1.1rem;">Scan or enter your Member ID to check in.</p>
+                    <input type="text" id="kiosk-id-input" readonly inputmode="none" class="search-bar mt-2" placeholder="󠁯•󠁏󠁏󠁯•󠁏󠁏󠁯•󠁏󠁏󠁯•󠁏󠁏" maxlength="8" pattern="\d*" style="font-size: 3rem; text-align: center; letter-spacing: 5px; width: 80%; max-width: 300px;" onkeyup="if(event.key === 'Enter') App.kioskSubmit()">
+                    
+                    <!-- Numpad -->
+                    <div class="kiosk-numpad mt-2">
+                        <button onclick="App.numpadPress('1')">1</button>
+                        <button onclick="App.numpadPress('2')">2</button>
+                        <button onclick="App.numpadPress('3')">3</button>
+                        <button onclick="App.numpadPress('4')">4</button>
+                        <button onclick="App.numpadPress('5')">5</button>
+                        <button onclick="App.numpadPress('6')">6</button>
+                        <button onclick="App.numpadPress('7')">7</button>
+                        <button onclick="App.numpadPress('8')">8</button>
+                        <button onclick="App.numpadPress('9')">9</button>
+                        <button onclick="App.numpadPress('clear')" style="font-size: 1rem; color: var(--danger);">Clear</button>
+                        <button onclick="App.numpadPress('0')">0</button>
+                        <button onclick="App.numpadPress('back')" style="font-size: 1rem;">Back</button>
+                        <button onclick="App.kioskSubmit()" class="btn-enter">Check In</button>
+                    </div>
 
-                <button onclick="App.kioskSubmit()" class="btn-primary btn-large mt-2 desktop-checkin-btn" style="width: 80%; max-width: 300px;">Check In</button>
-                <div id="kiosk-message" class="kiosk-msg hidden"></div>
+                    <button onclick="App.kioskSubmit()" class="btn-primary btn-large mt-2 desktop-checkin-btn" style="width: 80%; max-width: 300px;">Check In</button>
+                    <div id="kiosk-message" class="kiosk-msg hidden"></div>
+                </div>
             </div>
 
-            <div class="card" style="height: 100%; padding: 0;">
-                <div class="flex justify-between align-center" style="padding: 1.5rem 1.5rem 1rem 1.5rem;">
-                    <h3 style="font-size: 1.5rem; margin:0;">Currently Inside</h3>
+            <div class="kiosk-card" style="height: 100%;">
+                <div class="kiosk-card-header">
+                    <h3>Currently Inside</h3>
                     <span class="badge badge-inside" id="kiosk-present-count" style="font-size: 1.2rem;">0</span>
                 </div>
                 <div class="table-responsive" style="max-height: 330px; overflow-y: auto; border: none; border-top: 1px solid var(--gray-light); border-radius: 0;">
@@ -79,24 +83,24 @@
                 </div>
             </div>
             
-            <div class="card" style="grid-column: 1 / -1; padding: 0; overflow: hidden; border: 1px solid var(--gray-light);">
-                <div style="padding: 1.5rem 1.5rem 1rem 1.5rem; border-bottom: 1px solid var(--gray-light); background: var(--light);">
-                    <h3 style="font-size: 1.5rem; margin:0;">Gym Schedule</h3>
+            <div class="kiosk-card" style="grid-column: 1 / -1;">
+                <div class="kiosk-card-header">
+                    <h3>Gym Schedule</h3>
                 </div>
                 <!-- FIXED SCHEDULE SCROLLABLE CONTAINER -->
                 <div class="calendar-wrapper" style="border:none; border-radius: 0;">
                     <div id="kiosk-schedule-container" style="background: var(--white); overflow-x: auto; overflow-y: auto; max-height: 500px;"></div>
                 </div>
             </div>
-            <div class="card" style="grid-column: 1 / -1; padding: 1.25rem; max-height: 360px; overflow: hidden; border: 1px solid var(--gray-light);">
-                <div class="flex justify-between align-center" style="padding-bottom: 0.75rem; border-bottom: 1px solid var(--gray-light);">
+            <div class="kiosk-card" style="grid-column: 1 / -1;">
+                <div class="kiosk-card-header">
                     <div>
-                        <h3 id="kiosk-leaderboard-title" style="margin: 0; font-size: 1.25rem;">Training Leaderboard</h3>
-                        <p id="kiosk-leaderboard-subtitle" class="text-gray" style="margin: 0; font-size: 0.95rem;">Most trainings last 3 months.</p>
+                        <h3 id="kiosk-leaderboard-title" style="margin: 0;">Training Leaderboard</h3>
+                        <p id="kiosk-leaderboard-subtitle" class="text-gray" style="margin: 0;">Most trainings last 3 months.</p>
                     </div>
                     <span id="kiosk-leaderboard-badge" class="badge badge-inside" style="background: #eef2ff; color: #1e3a8a;">Leaderboard</span>
                 </div>
-                <div id="kiosk-leaderboard-container" class="mt-3" style="max-height: 240px; overflow-y: auto;"></div>
+                <div id="kiosk-leaderboard-container" class="kiosk-card-body" style="max-height: 240px; overflow-y: auto;"></div>
             </div>
         </div>
     </div>

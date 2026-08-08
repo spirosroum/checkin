@@ -360,7 +360,7 @@ App.applyKioskTranslations = function() {
         const memberMenuBtn = document.getElementById('member-menu-btn');
         if (memberMenuBtn) { memberMenuBtn.title = menuBtnTitle; memberMenuBtn.setAttribute('aria-label', menuBtnTitle); }
         // Main kiosk texts
-        const h2 = document.querySelector('#view-kiosk .kiosk-input-card h2'); if (h2) h2.innerText = map.memberCheckInTitle;
+        const h2 = document.querySelector('#view-kiosk .kiosk-input-card .kiosk-card-header h3'); if (h2) h2.innerText = map.memberCheckInTitle;
         const p = document.querySelector('#view-kiosk .kiosk-input-card p.text-gray'); if (p) p.innerText = map.scanPrompt;
         const kioskInput = document.getElementById('kiosk-id-input'); if (kioskInput) kioskInput.placeholder = map.enterMemberIdPlaceholder || '••••';
         // Numpad buttons

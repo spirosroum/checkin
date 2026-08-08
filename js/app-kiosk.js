@@ -519,7 +519,7 @@ Object.assign(App, {
                                 </div>
                                 <span class="text-gray" style="font-size: 0.9rem;">${Utils.formatTime(visit.entryTime)}</span>
                             </div>
-                            ${Utils.getBeltBadge(m.belt)}
+                            ${Utils.getBeltBox(m.belt)}
                         </td></tr>`;
                     } else {
                         // Admin list: row background indicates unpaid visit or frozen status
@@ -618,8 +618,8 @@ Object.assign(App, {
                             <div class="kiosk-lb-card">
                                 <div class="kiosk-lb-rank">${App.leaderboardRankCell(entry.rank)}</div>
                                 <strong class="kiosk-lb-name">${Utils.escapeHTML(entry.member.firstName)} ${Utils.escapeHTML(entry.member.lastName)}</strong>
-                                <span class="kiosk-lb-count-badge">${entry.count}</span>
-                                <span class="kiosk-lb-belt">${Utils.getBeltBadge(entry.member.belt)}</span>
+                                <span class="kiosk-lb-belt">${Utils.getBeltBox(entry.member.belt)}</span>
+                                <span class="kiosk-lb-count-badge" title="${entry.count} trainings">${entry.count}</span>
                             </div>
                         `).join('')}
                     </div>

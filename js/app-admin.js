@@ -74,7 +74,7 @@ Object.assign(App, {
                 // getDay() returns 0..6 where 0 is Sunday — with Sunday-first calendar we can use it directly
                 let startDayOffset = firstDayObj.getDay(); 
 
-                for(let i=0; i<startDayOffset; i++) { html += `<div></div>`; }
+                for(let i=0; i<startDayOffset; i++) { html += `<div class="analytical-cal-cell"></div>`; }
 
                 for(let day=1; day<=daysInMonth; day++) {
                     const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
@@ -94,15 +94,17 @@ Object.assign(App, {
                         }
  
                         html += `
-                            <div style="border: 1px solid var(--gray-light); padding: 10px; background: ${bg}; border-radius: 4px; cursor:pointer; display:flex; flex-direction:column; align-items:center;" onclick="App.filterVisitsByDate('${dateStr}')">
+                            <div class="analytical-cal-cell" style="background: ${bg}; cursor:pointer;" onclick="App.filterVisitsByDate('${dateStr}')">
                                 <strong style="display:block; margin-bottom:5px;">${day}</strong>
                                 <span style="font-size:0.85rem; color:var(--dark); font-weight:600;">${vCount} people</span>
                                 ${unpaidCount > 0 ? `<span style="font-size:0.7rem; color:var(--danger); font-weight:600;">${unpaidCount} unpaid</span>` : ''}
                             </div>
                         `;
                 }
+                // Blank trailing cells so every month renders a full 6 rows (42 cells)
+                // with uniform height — the calendar never shifts between months.
                 const usedCells = startDayOffset + daysInMonth;
-                for(let i=usedCells; i<42; i++) { html += `<div></div>`; }
+                for(let i=usedCells; i<42; i++) { html += `<div class="analytical-cal-cell"></div>`; }
                 html += `</div>`;
                 container.innerHTML = html;
             },
