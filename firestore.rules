@@ -39,9 +39,9 @@ service cloud.firestore {
     }
 
     // Anonymous kiosk / member self-service flows.
-    // Supports both unauthenticated (legacy) and Firebase Anonymous Auth tokens.
+    // Requires a Firebase Anonymous Auth token — unauthenticated requests are denied.
     function isKiosk() {
-      return request.auth == null || request.auth.token.email == null;
+      return request.auth != null && request.auth.token.email == null;
     }
 
     // Kiosk may only adjust session counts and its own ID on member docs
