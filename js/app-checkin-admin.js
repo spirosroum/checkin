@@ -435,7 +435,6 @@ Object.assign(App, {
                 if (!input.value) input.value = App.getCheckinQRUrl();
                 const url = input.value.trim();
                 localStorage.setItem('gym_checkin_qr_url', url);
-                container.innerHTML = '';
                 if (!window.QRCode) {
                     container.innerHTML = '<p class="text-gray">QR library not loaded.</p>';
                     return;
@@ -444,8 +443,13 @@ Object.assign(App, {
                     container.innerHTML = '<p class="text-gray">Enter your hosted check-in URL above to generate the QR code.</p>';
                     return;
                 }
+                // Keep the already-rendered QR for the same URL instead of wiping
+                // and redrawing it, so the QR does not reset on every refresh.
+                if (App._checkinQRLastUrl === url && container.querySelector('img, canvas')) return;
+                container.innerHTML = '';
                 try {
                     new QRCode(container, { text: url, width: 220, height: 220, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+                    App._checkinQRLastUrl = url;
                 } catch (e) {
                     container.innerHTML = '<p class="text-gray">Could not generate QR code.</p>';
                 }

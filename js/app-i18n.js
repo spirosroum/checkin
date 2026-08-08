@@ -343,14 +343,12 @@ App.applyKioskTranslations = function() {
         if (kioskDrawerLang) kioskDrawerLang.innerText = langLabelText;
         const memberDrawerLang = document.getElementById('member-drawer-lang');
         if (memberDrawerLang) memberDrawerLang.innerText = langLabelText;
-        // Header language buttons (kiosk & member) — flag + language name
-        const langBtnText = lang === 'en' ? 'English' : 'Ελληνικά';
+        // Header language buttons (kiosk & member) — flag only
         const langBtnTitle = map.toggleLanguageTitle || 'Toggle language';
         ['kiosk-lang-btn', 'member-lang-btn'].forEach(id => {
             const langBtn = document.getElementById(id);
             if (langBtn) {
-                const langBtnSpan = langBtn.querySelector('.portal-lang-text');
-                if (langBtnSpan) langBtnSpan.innerText = langBtnText;
+                langBtn.innerText = map.langFlag || '🇬🇧';
                 langBtn.title = langBtnTitle;
                 langBtn.setAttribute('aria-label', langBtnTitle);
             }

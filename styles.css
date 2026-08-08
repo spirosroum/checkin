@@ -279,6 +279,12 @@
         .kiosk-numpad button:active { background: var(--gray); color: var(--white); }
         .kiosk-numpad .btn-enter { grid-column: span 3; background: var(--primary); color: white; }
 
+        /* While the member check-in class modal is open, hide the kiosk's own
+           Check-In button so only the modal's Confirm button shows — prevents
+           two blue call-to-action buttons from appearing at the same time. */
+        body:has(#modal-checkin-classes:not(.hidden)) .desktop-checkin-btn,
+        body:has(#modal-checkin-classes:not(.hidden)) .kiosk-numpad .btn-enter { display: none; }
+
         /* Sidebar Navigation */
         .sidebar { width: 260px; background: var(--dark); color: var(--white); display: flex; flex-direction: column; padding: 1.5rem 1rem; transition: left 0.3s ease; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.1); z-index: 1000; }
         .sidebar-header { display: none; }
