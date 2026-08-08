@@ -656,35 +656,34 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         }
 
         function renderAfterCloudSync() {
-            try { document.getElementById('kiosk-title-display').innerText = STATE.portalName; } catch (e) {}
-            try {
-                App.renderLivePresent && App.renderLivePresent();
-                App.renderKioskLeaderboard && App.renderKioskLeaderboard();
-                App.renderCheckinNotice && App.renderCheckinNotice();
-                App.updateNotificationBadge && App.updateNotificationBadge();
-                if (App.isAdminAuthed()) {
-                    App.renderMemberDirectory && App.renderMemberDirectory();
-                    App.renderMemberBin && App.renderMemberBin();
-                    App.renderPlans && App.renderPlans();
-                    App.renderPlanBin && App.renderPlanBin();
-                    App.renderSchedules && App.renderSchedules();
-                    App.renderScheduleBin && App.renderScheduleBin();
-                    App.renderNotifications && App.renderNotifications();
-                    App.renderNotificationBin && App.renderNotificationBin();
-                    App.renderVisitLog && App.renderVisitLog();
-                    App.renderAdminDashboard && App.renderAdminDashboard();
-                    App.renderAllPayments && App.renderAllPayments();
-                    App.renderAnalyticalCalendar && App.renderAnalyticalCalendar();
-                }
-                try { App.renderCalendarView && App.renderCalendarView('kiosk-schedule-container', false); } catch (e) {}
-                if (App.isAdminAuthed()) {
-                    try { App.renderCalendarView && App.renderCalendarView('master-schedule-container', true); } catch (e) {}
-                }
-                if (typeof window.renderSchedule === 'function') try { window.renderSchedule(); } catch (e) {}
-                if (typeof window.renderUI === 'function') try { window.renderUI(); } catch (e) {}
-                if (typeof window.updateDashboard === 'function') try { window.updateDashboard(); } catch (e) {}
-                App.updateUICurrency && App.updateUICurrency();
-            } catch (e) { console.warn('Error while re-rendering after Firestore update', e); }
+            function safe(cb) { try { cb(); } catch (e) { console.warn('renderAfterCloudSync error:', e); } }
+            safe(() => { document.getElementById('kiosk-title-display').innerText = STATE.portalName; });
+            safe(() => App.renderLivePresent && App.renderLivePresent());
+            safe(() => App.renderKioskLeaderboard && App.renderKioskLeaderboard());
+            safe(() => App.renderCheckinNotice && App.renderCheckinNotice());
+            safe(() => App.updateNotificationBadge && App.updateNotificationBadge());
+            if (App.isAdminAuthed()) {
+                safe(() => App.renderMemberDirectory && App.renderMemberDirectory());
+                safe(() => App.renderMemberBin && App.renderMemberBin());
+                safe(() => App.renderPlans && App.renderPlans());
+                safe(() => App.renderPlanBin && App.renderPlanBin());
+                safe(() => App.renderSchedules && App.renderSchedules());
+                safe(() => App.renderScheduleBin && App.renderScheduleBin());
+                safe(() => App.renderNotifications && App.renderNotifications());
+                safe(() => App.renderNotificationBin && App.renderNotificationBin());
+                safe(() => App.renderVisitLog && App.renderVisitLog());
+                safe(() => App.renderAdminDashboard && App.renderAdminDashboard());
+                safe(() => App.renderAllPayments && App.renderAllPayments());
+                safe(() => App.renderAnalyticalCalendar && App.renderAnalyticalCalendar());
+            }
+            safe(() => App.renderCalendarView && App.renderCalendarView('kiosk-schedule-container', false));
+            if (App.isAdminAuthed()) {
+                safe(() => App.renderCalendarView && App.renderCalendarView('master-schedule-container', true));
+            }
+            safe(() => { if (typeof window.renderSchedule === 'function') window.renderSchedule(); });
+            safe(() => { if (typeof window.renderUI === 'function') window.renderUI(); });
+            safe(() => { if (typeof window.updateDashboard === 'function') window.updateDashboard(); });
+            safe(() => App.updateUICurrency && App.updateUICurrency());
         }
 
         function initRealtimeSync() {
@@ -1608,21 +1607,5 @@ window.App = App;
 window.DB = DB;
 window.Utils = Utils;
 window.FSEngine = FSEngine;
-
-{
-// Initialize Firebase compat app (used by the firestore-compat API)
-      const firebaseConfig = {
-        apiKey: "AIzaSyCByr-xf2ptBhLEb8GXtiChJGKSNBIWDp4",
-        authDomain: "ssg-desk.firebaseapp.com",
-        databaseURL: "https://ssg-desk-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "ssg-desk",
-        storageBucket: "ssg-desk.firebasestorage.app",
-        messagingSenderId: "999682511515",
-        appId: "1:999682511515:web:4ef0be1919233eaef1ec3e"
-      };
-      try {
-        if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
-      } catch (e) { console.warn('Firebase compat init:', e); }
-}
 
 

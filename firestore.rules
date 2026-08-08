@@ -40,6 +40,10 @@ service cloud.firestore {
 
     // Anonymous kiosk / member self-service flows.
     // Requires a Firebase Anonymous Auth token — unauthenticated requests are denied.
+    // CAUTION: Always check isAdmin() BEFORE isKiosk() in any rule. isKiosk()
+    // matches any request without an email — including admins if their token
+    // email field is absent for any reason. Checking admin first guarantees
+    // the admin path has priority.
     function isKiosk() {
       return request.auth != null && request.auth.token.email == null;
     }
