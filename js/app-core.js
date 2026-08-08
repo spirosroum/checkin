@@ -864,6 +864,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             },
 
             exportData: () => {
+                if (!FSEngine.isAdminClient()) { alert('Admin access required.'); return; }
                 const members = (STATE.members || []).map(m => {
                     const entry = Object.assign({}, m);
                     if (FSEngine.isAdminClient() && STATE.memberPrivate && STATE.memberPrivate[m.id]) {
@@ -886,6 +887,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             },
 
             importData: () => {
+                if (!FSEngine.isAdminClient()) { alert('Admin access required.'); return; }
                 const fileInput = document.getElementById('import-file');
                 if (!fileInput.files.length) return alert('Please select a file first.');
                 const reader = new FileReader();
@@ -1418,16 +1420,26 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 App.clearSensitiveData();
             },
 
-            // Securely erase private member PII, payment data, and visit history
-            // from the client when admin auth is lost or the user logs out.
+            // Securely erase all sensitive data from the client when admin auth
+            // is lost or the user logs out. Prevents subsequent kiosk users on
+            // the same machine from reading payment ledgers, PII, or internal
+            // operation data via devtools / localStorage inspection.
             clearSensitiveData: () => {
                 STATE.memberPrivate = {};
+                STATE.payments = [];
+                STATE.notifications = [];
+                STATE.notificationBin = [];
+                STATE.bin = [];
                 if (STATE.members) {
                     STATE.members.forEach(m => {
                         MEMBER_PRIVATE_FIELDS.forEach(f => { delete m[f]; });
                     });
                 }
                 localStorage.removeItem('gym_member_private');
+                localStorage.removeItem('gym_payments');
+                localStorage.removeItem('gym_notifications');
+                localStorage.removeItem('gym_notification_bin');
+                localStorage.removeItem('gym_bin');
                 fallbackToLocal();
             },
 

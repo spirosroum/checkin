@@ -24,11 +24,15 @@ service cloud.firestore {
     // DEPLOY: firebase deploy --only firestore:rules
     // =====================================================================
 
-    // The gym administrator account (must match ADMIN_EMAIL in js/app-core.js)
+    // The gym administrator account.
+    // Custom claims (request.auth.token.admin == true) are the primary check
+    // (set via Admin SDK or a Cloud Function). The email fallback is kept for
+    // backward-compatibility during the transition and can be removed later.
     function isAdmin() {
       return request.auth != null &&
-             request.auth.token.email != null &&
-             request.auth.token.email.lower() == 'spirosroumeliotis29@gmail.com';
+             (request.auth.token.admin == true ||
+              (request.auth.token.email != null &&
+               request.auth.token.email.lower() == 'spirosroumeliotis29@gmail.com'));
     }
 
     // Anonymous kiosk / member self-service flows (no Firebase sign-in)
@@ -55,10 +59,12 @@ service cloud.firestore {
     // PUBLIC-READ COLLECTIONS (kiosk/member-portal require these)
     // =====================================================================
 
-    // Legacy single-document store: kept for history; admin writes only.
+    // Legacy single-document store: kept for history; admin-only.
+    // The migration copied all data to per-record collections and deleted
+    // the legacy doc. Public read was removed — in the unlikely event the
+    // doc still exists, it held all sensitive data in one document.
     match /gym/{docId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow read, create, update, delete: if isAdmin();
     }
 
     // Settings (portal name, currency, belt visibility, checkin notice)
@@ -162,7 +168,7 @@ service cloud.firestore {
     // expirationDate, accountStatus, sessionsLeft, planDays, hideFromLeaderboard)
     match /members/{docId} {
       allow read: if true;
-      allow create: if isAdmin() || (isKiosk() && request.resource.data.id == docId);
+      allow create: if isAdmin() || (isKiosk() && request.resource.data.id == docId && request.resource.data.name is string);
       allow update: if isAdmin() || (isKiosk() && kioskMemberUpdate());
       allow delete: if isAdmin() || (isKiosk() && resource.data.id != docId);
     }

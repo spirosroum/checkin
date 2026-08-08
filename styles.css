@@ -259,15 +259,16 @@
 
         /* Belt Badges */
         .belt-badge { font-size: 0.75rem; padding: 0.25rem 0.6rem; border-radius: 6px; border: 1px solid var(--gray-light); text-transform: uppercase; font-weight: bold; box-shadow: 0 1px 2px rgba(0,0,0,0.1); display: inline-block;}
+        /* Textless fixed-width belt indicator used in compact kiosk lists.
+           Reuses the .belt-* color classes below so every belt is the same size
+           and the white belt stays visible via its outline. */
+        .belt-box { display: inline-block; width: 84px; height: 22px; border-radius: 4px; border: 1px solid var(--gray-light); vertical-align: middle; }
         .belt-white { background: var(--white); color: var(--dark-panel); border-color: #cbd5e1; }
         .belt-blue { background: var(--primary-hover); color: var(--white); border-color: #1e3a8a; }
         .belt-purple { background: #6b21a8; color: var(--white); border-color: #4c1d95; }
         .belt-brown { background: #78350f; color: var(--white); border-color: #451a03; }
         .belt-black { background: var(--dark); color: var(--white); border-color: #000000; }
         .belt-kids { background: #f59e0b; color: var(--white); border-color: #b45309; }
-        /* Textless fixed-width belt indicator used in compact kiosk lists.
-           Reuses the .belt-* color classes above so every belt is the same size. */
-        .belt-box { display: inline-block; width: 84px; height: 22px; border-radius: 4px; vertical-align: middle; }
 
         /* Kiosk "Most Trainings" leaderboard */
         .kiosk-leaderboard { display: flex; flex-direction: column; gap: 0.55rem; }
